@@ -91,17 +91,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?><!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Product Editor — IANOVA</title><style>
-*{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;background:#f5f7f6;margin:0;color:#0B2B1D}
-.top{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;background:#fff;border-bottom:1px solid #dce4df}
+*{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;background:#FAFAFB;margin:0;color:#0F0F12}
+.top{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;background:#fff;border-bottom:1px solid #E9EBEF}
 .wrap{max-width:700px;margin:24px auto;padding:0 16px}
-.card{background:#fff;border:1px solid #dce4df;border-radius:14px;padding:22px}
+.card{background:#fff;border:1px solid #E9EBEF;border-radius:14px;padding:22px}
 .field{margin-bottom:15px}
 .field label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
-.field input,.field textarea,.field select{width:100%;padding:11px;border:1px solid #ccd7d1;border-radius:9px;font:inherit}
+.field input,.field textarea,.field select{width:100%;padding:11px;border:1px solid #E9EBEF;border-radius:16px;font:inherit}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.btn{display:inline-block;border:0;border-radius:9px;padding:10px 14px;background:#0B2B1D;color:#fff;cursor:pointer;font-weight:700;text-decoration:none}
-.btn.amber{background:#F2A93B;color:#0B2B1D}
-.err{background:#fdeaea;color:#8a2424;padding:12px 14px;border-radius:9px;margin-bottom:16px}
+.btn{display:inline-block;border:0;border-radius:16px;padding:10px 14px;background:#0F0F12;color:#fff;cursor:pointer;font-weight:700;text-decoration:none}
+.btn.amber{background:#0F0F12;color:#0F0F12}
+.err{background:#FFF1F4;color:#E5173F;padding:12px 14px;border-radius:16px;margin-bottom:16px}
 @media(max-width:600px){.row{grid-template-columns:1fr}}
 </style></head><body>
 <div class="top"><h1 style="margin:0;font-size:20px;"><?= $product ? 'Edit' : 'Add' ?> product</h1><a class="btn" href="index.php">Back</a></div>
@@ -131,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="field"><label>Background color</label><input name="bg_color" value="<?= h($product['bg_color'] ?? '#EFF3EC') ?>"></div>
 <div class="field"><label>Description</label><textarea name="description" style="min-height:100px"><?= h($product['description'] ?? '') ?></textarea></div>
 <div class="field"><label>Product image (max 5MB)</label><input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif">
-<?php if (!empty($product['image'])): ?><p><img src="../<?= h($product['image']) ?>" style="width:80px;height:80px;object-fit:cover;border-radius:9px;margin-top:8px;"></p><?php endif; ?>
+<?php if (!empty($product['image'])): ?><p><img src="../<?= h($product['image']) ?>" style="width:80px;height:80px;object-fit:cover;border-radius:16px;margin-top:8px;"></p><?php endif; ?>
 </div>
 <div class="field"><label><input type="checkbox" name="is_flash_deal" style="width:auto" <?= !empty($product['is_flash_deal']) ? 'checked' : '' ?>> Show as flash deal</label></div>
 <button class="btn amber" type="submit">Save product</button>

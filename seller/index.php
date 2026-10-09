@@ -16,13 +16,13 @@ $products = $pdo->prepare('SELECT * FROM products WHERE seller_id = ? ORDER BY c
 $products->execute([$seller_id]);
 $products = $products->fetchAll();
 ?><!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Seller Dashboard — IANOVA</title><style>
-*{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;background:#f5f7f6;margin:0;color:#0B2B1D}
-.top{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;background:#fff;border-bottom:1px solid #dce4df}
+*{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;background:#FAFAFB;margin:0;color:#0F0F12}
+.top{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;background:#fff;border-bottom:1px solid #E9EBEF}
 .top h1{margin:0;font-size:20px}
 .wrap{max-width:1000px;margin:24px auto;padding:0 16px}
-.btn{display:inline-block;border:0;border-radius:9px;padding:10px 14px;background:#0B2B1D;color:#fff;cursor:pointer;font-weight:700;text-decoration:none}
-.btn.amber{background:#F2A93B;color:#0B2B1D}
-.table-wrap{overflow:auto;background:#fff;border:1px solid #dce4df;border-radius:14px}
+.btn{display:inline-block;border:0;border-radius:16px;padding:10px 14px;background:#0F0F12;color:#fff;cursor:pointer;font-weight:700;text-decoration:none}
+.btn.amber{background:#0F0F12;color:#0F0F12}
+.table-wrap{overflow:auto;background:#fff;border:1px solid #E9EBEF;border-radius:14px}
 table{width:100%;border-collapse:collapse;min-width:600px}
 th,td{padding:12px 14px;border-bottom:1px solid #e8eeea;text-align:left}
 th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;background:#f7f9f8}

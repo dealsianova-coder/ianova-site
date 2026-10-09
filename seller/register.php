@@ -31,15 +31,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?><!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sell on IANOVA</title><style>
-body{font-family:Inter,Arial,sans-serif;background:#f5f7f6;margin:0;color:#0B2B1D}
-.wrap{max-width:440px;margin:8vh auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce4df;box-shadow:0 20px 50px -30px rgba(11,30,23,.3)}
+body{font-family:Inter,Arial,sans-serif;background:#FAFAFB;margin:0;color:#0F0F12}
+.wrap{max-width:440px;margin:8vh auto;background:#fff;padding:30px;border-radius:28px;border:1px solid #E9EBEF;box-shadow:0 20px 50px -30px rgba(11,30,23,.3)}
 h1{margin-top:0}
 label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
-input{width:100%;padding:11px;margin-bottom:15px;box-sizing:border-box;border:1px solid #ccd7d1;border-radius:9px;font:inherit}
-button{width:100%;padding:12px;background:#F2A93B;color:#0B2B1D;border:0;border-radius:9px;font-weight:700;cursor:pointer}
-.err{background:#fdeaea;color:#8a2424;padding:12px 14px;border-radius:9px;margin-bottom:16px}
-.ok{background:#E7F4ED;padding:14px;border-radius:9px}
-a{color:#0B2B1D;font-weight:700}
+input{width:100%;padding:11px;margin-bottom:15px;box-sizing:border-box;border:1px solid #E9EBEF;border-radius:16px;font:inherit}
+button{width:100%;padding:14px;background:#0F0F12;color:#fff;border:0;border-radius:16px;font-weight:700;cursor:pointer}
+.err{background:#FFF1F4;color:#E5173F;padding:12px 14px;border-radius:16px;margin-bottom:16px}
+.ok{background:#F3F4F7;padding:14px;border-radius:16px}
+a{color:#0F0F12;font-weight:700}
 </style></head><body>
 <div class="wrap">
 <h1>Sell on IANOVA</h1>
@@ -55,7 +55,7 @@ a{color:#0B2B1D;font-weight:700}
     <label>Phone</label>
     <input name="phone" value="<?= h($_POST['phone'] ?? '') ?>">
     <label>Tell us about your business</label>
-    <textarea name="business_description" rows="4" placeholder="What do you sell, and what makes your business a good fit for IANOVA?" style="width:100%;padding:11px;margin-bottom:15px;box-sizing:border-box;border:1px solid #ccd7d1;border-radius:9px;font:inherit;resize:vertical;"><?= h($_POST['business_description'] ?? '') ?></textarea>
+    <textarea name="business_description" rows="4" placeholder="What do you sell, and what makes your business a good fit for IANOVA?" style="width:100%;padding:11px;margin-bottom:15px;box-sizing:border-box;border:1px solid #E9EBEF;border-radius:16px;font:inherit;resize:vertical;"><?= h($_POST['business_description'] ?? '') ?></textarea>
     <label>Password</label>
     <input type="password" name="password" required minlength="6">
     <button type="submit">Apply to sell</button>
