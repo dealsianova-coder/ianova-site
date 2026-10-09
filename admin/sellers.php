@@ -1,6 +1,8 @@
 <?php
 require_once 'includes/auth.php';
 require_once __DIR__ . '/../includes/mailer.php';
+require_once __DIR__ . '/../includes/seller_messaging.php';
+ensure_seller_messaging($pdo);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     admin_check_csrf();
@@ -25,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-$sellers = $pdo->query('SELECT s.*, COUNT(p.id) products FROM sellers s LEFT JOIN products p ON p.seller_id = s.id GROUP BY s.id ORDER BY FIELD(s.status, "pending", "approved", "suspended", "rejected"), s.created_at DESC')->fetchAll();
+$sellers = $pdo->query('SELECT s.*, COUNT(p.id) products, (SELECT COUNT(*) FROM seller_messages m WHERE m.seller_id = s.id AND m.sender = "seller" AND m.read_at IS NULL) unread FROM sellers s LEFT JOIN products p ON p.seller_id = s.id GROUP BY s.id ORDER BY FIELD(s.status, "pending", "approved", "suspended", "rejected"), s.created_at DESC')->fetchAll();
 
 $page_title = 'Sellers';
 require 'includes/header.php';
@@ -44,6 +46,7 @@ if (!empty($_SESSION['seller_mail_note'])): ?>
 <td><span class="pill"><?= admin_h(ucfirst($s['status'])) ?></span></td>
 <td><?= admin_h($s['created_at']) ?></td>
 <td>
+<a class="btn" style="margin-right:6px" href="seller_messages.php?id=<?= intval($s['id']) ?>">Messages<?= intval($s['unread']) > 0 ? ' (' . intval($s['unread']) . ' new)' : '' ?></a>
 <?php if ($s['status'] === 'pending'): ?>
 <form method="post" style="display:inline">
 <input type="hidden" name="csrf" value="<?= admin_csrf() ?>">

@@ -102,3 +102,26 @@ function send_seller_status_email(string $email, string $business, string $statu
 
     return false;
 }
+
+
+/** Email a seller the admin's reply (it also shows in the app). */
+function send_seller_reply_email(string $email, string $business, string $message): bool {
+    $html = '<div style="font-family:Arial,sans-serif;color:#0F0F12;max-width:520px;line-height:1.5;">'
+        . '<h2>New message from ' . h(SITE_NAME) . '</h2>'
+        . '<p>Hello ' . h($business) . ',</p>'
+        . '<div style="background:#F3F4F7;border-radius:16px;padding:14px 16px;white-space:pre-wrap;">' . h($message) . '</div>'
+        . '<p style="margin-top:16px;">Reply in the ' . h(SITE_NAME) . ' app: Profile, then Sell on ' . h(SITE_NAME) . '.</p>'
+        . '<p style="margin-top:24px;color:#5F6575;font-size:13px;">— ' . h(SITE_NAME) . ' team</p></div>';
+    return send_mail($email, $business, 'New message about your ' . SITE_NAME . ' seller account', $html);
+}
+
+/** Tell the admin a seller wrote or applied. */
+function send_admin_seller_alert(string $business, string $email, string $message): bool {
+    if (!defined('ADMIN_EMAIL') || ADMIN_EMAIL === '') return false;
+    $html = '<div style="font-family:Arial,sans-serif;color:#0F0F12;max-width:520px;line-height:1.5;">'
+        . '<h2>Seller message</h2>'
+        . '<p><strong>' . h($business) . '</strong> (' . h($email) . ')</p>'
+        . '<div style="background:#F3F4F7;border-radius:16px;padding:14px 16px;white-space:pre-wrap;">' . h($message) . '</div>'
+        . '<p style="margin-top:16px;">Reply from Admin, then Sellers, then Messages.</p></div>';
+    return send_mail(ADMIN_EMAIL, 'Admin', 'Seller message from ' . $business, $html);
+}
