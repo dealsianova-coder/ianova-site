@@ -20,6 +20,8 @@ if (!defined('SMTP_HOST')) define('SMTP_HOST', 'smtp.gmail.com');
 if (!defined('SMTP_PORT')) define('SMTP_PORT', 587);
 if (!defined('SMTP_USER')) define('SMTP_USER', 'dealsianova@gmail.com');
 if (!defined('SMTP_PASS')) define('SMTP_PASS', '');
+// Public address of the site, used for links in emails (e.g. https://shop.example.com). Leave empty on a phone.
+if (!defined('SITE_URL')) define('SITE_URL', '');
 if (!defined('ADMIN_EMAIL')) define('ADMIN_EMAIL', 'dealsianova@gmail.com');
 
 session_start();

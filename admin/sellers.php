@@ -1,12 +1,25 @@
 <?php
 require_once 'includes/auth.php';
+require_once __DIR__ . '/../includes/mailer.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     admin_check_csrf();
     $id = (int) $_POST['id'];
     $action = $_POST['status_action'] ?? '';
     if (in_array($action, ['approved', 'rejected', 'suspended'], true)) {
+        $cur = $pdo->prepare('SELECT business_name, email, status FROM sellers WHERE id = ?');
+        $cur->execute([$id]);
+        $seller = $cur->fetch();
+
         $pdo->prepare('UPDATE sellers SET status = ? WHERE id = ?')->execute([$action, $id]);
+
+        // Email the seller when they are approved, or when a pending application is rejected.
+        if ($seller && (($action === 'approved' && $seller['status'] !== 'approved') || ($action === 'rejected' && $seller['status'] === 'pending'))) {
+            $sent = send_seller_status_email($seller['email'], $seller['business_name'], $action);
+            $_SESSION['seller_mail_note'] = $sent
+                ? 'Email sent to ' . $seller['email'] . '.'
+                : 'Status saved, but the email to ' . $seller['email'] . ' could not be sent. Check the Gmail app password in config.local.php.';
+        }
     }
     header('Location: sellers.php');
     exit;
@@ -16,7 +29,9 @@ $sellers = $pdo->query('SELECT s.*, COUNT(p.id) products FROM sellers s LEFT JOI
 
 $page_title = 'Sellers';
 require 'includes/header.php';
-?>
+if (!empty($_SESSION['seller_mail_note'])): ?>
+<div class="notice" style="margin-bottom:14px"><?= admin_h($_SESSION['seller_mail_note']) ?></div>
+<?php unset($_SESSION['seller_mail_note']); endif; ?>
 <div class="table-wrap">
 <table class="table">
 <tr><th>Business</th><th>Email</th><th>Phone</th><th>Products</th><th>Status</th><th>Joined</th><th>Action</th></tr>

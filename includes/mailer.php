@@ -1,4 +1,8 @@
 <?php
+// Composer's autoloader provides PHPMailer (run `composer install` in this folder).
+$__autoload = __DIR__ . '/../vendor/autoload.php';
+if (is_file($__autoload)) { require_once $__autoload; }
+
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
@@ -7,6 +11,14 @@ use PHPMailer\PHPMailer\Exception;
  * (failures are logged, never thrown, so checkout never breaks over email).
  */
 function send_mail($to, $to_name, $subject, $html_body) {
+    if (!class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
+        error_log('Mail not sent: PHPMailer is missing. Run `composer install`.');
+        return false;
+    }
+    if (SMTP_PASS === '') {
+        error_log('Mail not sent: SMTP_PASS is empty. Set it in config.local.php.');
+        return false;
+    }
     $mail = new PHPMailer(true);
     try {
         $mail->isSMTP();
@@ -55,4 +67,38 @@ function send_order_emails(PDO $pdo, int $order_id, string $customer_name, strin
         . '<p style="margin-top:14px;font-size:16px;"><strong>Total: ' . CURRENCY . number_format($grand_total, 2) . '</strong></p>'
         . '</div>';
     send_mail(ADMIN_EMAIL, 'Admin', 'New order #' . $order_id . ' — ' . CURRENCY . number_format($grand_total, 2), $admin_html);
+}
+
+
+/**
+ * Tell a seller whether their application was approved or rejected.
+ * Returns true when the email was handed to the mail server.
+ */
+function send_seller_status_email(string $email, string $business, string $status): bool {
+    $login = (defined('SITE_URL') && SITE_URL !== '') ? rtrim(SITE_URL, '/') . '/seller/login.php' : '';
+    $wrap = function (string $inner): string {
+        return '<div style="font-family:Arial,sans-serif;color:#0F0F12;max-width:520px;line-height:1.5;">'
+            . $inner
+            . '<p style="margin-top:24px;color:#5F6575;font-size:13px;">— ' . h(SITE_NAME) . ' team</p></div>';
+    };
+
+    if ($status === 'approved') {
+        $btn = $login !== ''
+            ? '<p><a href="' . h($login) . '" style="display:inline-block;background:#0F0F12;color:#fff;padding:12px 22px;border-radius:12px;text-decoration:none;font-weight:700;">Open seller area</a></p>'
+            : '<p>Sign in on the ' . h(SITE_NAME) . ' website with the email and password you used to apply.</p>';
+        $html = $wrap('<h2>You are approved, ' . h($business) . '!</h2>'
+            . '<p>Your ' . h(SITE_NAME) . ' seller account is now active. You can add products, set prices and manage stock.</p>'
+            . $btn
+            . '<p style="color:#5F6575;font-size:13px;">New products may be reviewed before they appear in the store.</p>');
+        return send_mail($email, $business, 'Your ' . SITE_NAME . ' seller account is approved', $html);
+    }
+
+    if ($status === 'rejected') {
+        $html = $wrap('<h2>About your seller application</h2>'
+            . '<p>Hello ' . h($business) . ', thank you for applying to sell on ' . h(SITE_NAME) . '.</p>'
+            . '<p>We are not able to approve your application right now. You are welcome to reply to this email with more details about your business and we will take another look.</p>');
+        return send_mail($email, $business, 'Update on your ' . SITE_NAME . ' seller application', $html);
+    }
+
+    return false;
 }
