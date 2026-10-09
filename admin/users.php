@@ -1,0 +1,6 @@
+<?php
+require_once 'includes/auth.php';
+$error='';if($_SERVER['REQUEST_METHOD']==='POST'){admin_check_csrf();$id=(int)$_POST['id'];if(isset($_POST['delete'])){$pdo->prepare('DELETE FROM users WHERE id=?')->execute([$id]);}else{$name=trim($_POST['name']);$email=trim($_POST['email']);if($id)$pdo->prepare('UPDATE users SET name=?,email=? WHERE id=?')->execute([$name,$email,$id]);} }$users=$pdo->query('SELECT u.*,COUNT(o.id) orders FROM users u LEFT JOIN orders o ON o.user_id=u.id GROUP BY u.id ORDER BY u.id DESC')->fetchAll();
+$page_title='Users';
+require 'includes/header.php';
+?><div class="table-wrap"><table class="table"><tr><th>Name</th><th>Email</th><th>Orders</th><th>Joined</th><th>Edit</th><th>Delete</th></tr><?php foreach($users as $u):?><tr><form method="post"><td><input name="name" value="<?=admin_h($u['name'])?>"></td><td><input type="email" name="email" value="<?=admin_h($u['email'])?>"></td><td><?=intval($u['orders'])?></td><td><?=admin_h($u['created_at'])?></td><td><input type="hidden" name="csrf" value="<?=admin_csrf()?>"><input type="hidden" name="id" value="<?=intval($u['id'])?>"><button class="btn">Save</button></td><td><button class="btn red" name="delete" value="1" onclick="return confirm('Delete this user?')">Delete</button></td></form></tr><?php endforeach;?></table></div><?php require 'includes/footer.php';

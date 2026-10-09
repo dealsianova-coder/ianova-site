@@ -1,0 +1,4 @@
+<?php
+// Copy to config.local.php and fill in. Never commit config.local.php.
+define('SMTP_PASS', 'NEW-GMAIL-APP-PASSWORD');
+// define('DB_PASS', '');

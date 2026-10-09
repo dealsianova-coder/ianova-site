@@ -1,0 +1,27 @@
+/* IANOVA admin theme: same look as the storefront and the app. */
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#FAFAFB;color:#0F0F12;}
+.side{background:#fff;color:#0F0F12;border-right:1px solid #E9EBEF;}
+.brand{font-weight:800;letter-spacing:.16em;color:#0F0F12;}
+.brand span{color:#2FA84F;}
+.nav a{color:#5F6575;border-radius:14px;font-weight:600;}
+.nav a:hover,.nav a.active{background:#F3F4F7;color:#0F0F12;}
+.main{padding:32px;}
+.top h1{font-weight:800;letter-spacing:-0.03em;}
+.user{color:#5F6575;}
+.btn{background:#0F0F12;color:#fff;border-radius:999px;padding:11px 20px;font-weight:800;}
+.btn:hover{background:#2B2E38;}
+.btn.gold{background:#FFB400;color:#0F0F12;}
+.btn.red{background:#E5173F;color:#fff;}
+.btn.gray{background:#F3F4F7;color:#0F0F12;}
+.card,.table-wrap,.login{background:#fff;border:1px solid #E9EBEF;border-radius:22px;box-shadow:none;}
+.metric{font-weight:900;letter-spacing:-0.03em;}
+.muted{color:#5F6575;}
+.table th{background:#FAFAFB;color:#5F6575;border-bottom:1px solid #E9EBEF;}
+.table td{border-bottom:1px solid #F0F1F4;}
+.thumb{border-radius:14px;background:#F3F4F7;}
+.field label{color:#0F0F12;}
+.field input,.field textarea,.field select,.search{border:1px solid #E9EBEF;border-radius:14px;background:#fff;}
+.field input:focus,.field textarea:focus,.field select:focus,.search:focus{outline:none;border-color:#0F0F12;box-shadow:0 0 0 3px rgba(15,15,18,.08);}
+.notice{background:#E7F6EC;color:#0B6B37;border-radius:14px;}
+.error{background:#FDE7EB;color:#B00F2F;}
+.pill{background:#F3F4F7;color:#0F0F12;font-weight:700;}

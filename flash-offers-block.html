@@ -1,0 +1,54 @@
+
+<section class="flash-offers" id="deals">
+  <div class="fo-inner">
+    <div class="fo-head">
+      <h2><span class="bolt">⚡</span> Flash Offers</h2>
+      <div class="fo-timer">
+        Ends in
+        <span class="clock" id="fo-clock">
+          <span id="fo-h">03</span><b>:</b><span id="fo-m">12</span><b>:</b><span id="fo-s">45</span>
+        </span>
+      </div>
+      <a href="#" class="fo-seeall">See all →</a>
+    </div>
+
+    <div class="fo-row">
+
+      <div class="fo-card">
+        <div class="fo-media">
+          <img src="assets/img/product_c56cb30885750439.jpg" alt="">
+          <div class="fo-badge">40%<span>OFF</span></div>
+          <div class="fo-fav">♡</div>
+        </div>
+        <div class="fo-body">
+          <div class="fo-title">Sample product name</div>
+          <div class="fo-price-row">
+            <span class="fo-price">$8.40</span>
+            <span class="fo-price-was">$14.00</span>
+          </div>
+          <div class="fo-stock">
+            <div class="fo-stock-bar"><i style="width:72%"></i></div>
+            <span class="fo-stock-label"><b>72%</b> claimed</span>
+          </div>
+        </div>
+        <button class="fo-add">+</button>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<script>
+  const target = Date.now() + (3*3600 + 12*60 + 45) * 1000;
+  const fh = document.getElementById('fo-h');
+  const fm = document.getElementById('fo-m');
+  const fs = document.getElementById('fo-s');
+  function foTick(){
+    let diff = Math.max(0, Math.floor((target - Date.now())/1000));
+    fh.textContent = String(Math.floor(diff/3600)).padStart(2,'0');
+    fm.textContent = String(Math.floor((diff%3600)/60)).padStart(2,'0');
+    fs.textContent = String(diff%60).padStart(2,'0');
+  }
+  foTick();
+  setInterval(foTick, 1000);
+</script>
