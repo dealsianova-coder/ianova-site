@@ -14,6 +14,8 @@ function ianova_unique_slug(PDO $pdo, string $slug, int $id, string $color, stri
 }
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../includes/seller_messaging.php';
+ensure_seller_messaging($pdo);
 
 if (empty($_SESSION['seller_id'])) {
     header('Location: login.php');
@@ -74,14 +76,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$error) { $slug = ianova_unique_slug($pdo, $slug, (int) $id, $color, $size); }
 
+    // Trusted sellers (set by the admin) publish straight away; others wait for review.
+    $status = !empty($seller['auto_approve']) ? 'approved' : 'pending';
+
     if (!$error) {
         try {
             if ($id) {
-                $s = $pdo->prepare("UPDATE products SET category_id=?,name=?,slug=?,description=?,price=?,original_price=?,emoji=?,bg_color=?,stock=?,is_flash_deal=?,image=?,subcategory=?,color=?,size=?,status='pending' WHERE id=? AND seller_id=?");
-                $s->execute([$cat, $name, $slug, $desc, $price, $orig, $emoji, $bg, $stock, $flash, $image, $sub, $color, $size, $id, $seller_id]);
+                $s = $pdo->prepare("UPDATE products SET category_id=?,name=?,slug=?,description=?,price=?,original_price=?,emoji=?,bg_color=?,stock=?,is_flash_deal=?,image=?,subcategory=?,color=?,size=?,status=? WHERE id=? AND seller_id=?");
+                $s->execute([$cat, $name, $slug, $desc, $price, $orig, $emoji, $bg, $stock, $flash, $image, $sub, $color, $size, $status, $id, $seller_id]);
             } else {
-                $s = $pdo->prepare("INSERT INTO products(category_id,name,slug,description,price,original_price,emoji,bg_color,stock,is_flash_deal,image,subcategory,color,size,seller_id,seller_name,rating,review_count,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,4.5,0,'pending')");
-                $s->execute([$cat, $name, $slug, $desc, $price, $orig, $emoji, $bg, $stock, $flash, $image, $sub, $color, $size, $seller_id, $seller['business_name']]);
+                $s = $pdo->prepare("INSERT INTO products(category_id,name,slug,description,price,original_price,emoji,bg_color,stock,is_flash_deal,image,subcategory,color,size,seller_id,seller_name,rating,review_count,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,4.5,0,?)");
+                $s->execute([$cat, $name, $slug, $desc, $price, $orig, $emoji, $bg, $stock, $flash, $image, $sub, $color, $size, $seller_id, $seller['business_name'], $status]);
             }
             header('Location: index.php?submitted=1');
             exit;

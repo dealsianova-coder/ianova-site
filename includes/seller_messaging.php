@@ -24,6 +24,11 @@ function ensure_seller_messaging(PDO $pdo): void {
         INDEX idx_token (token_hash),
         INDEX idx_seller (seller_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // Per-seller switch: when 1, products this seller adds or edits go live without review.
+    $col = $pdo->query("SHOW COLUMNS FROM sellers LIKE 'auto_approve'")->fetch();
+    if (!$col) {
+        $pdo->exec('ALTER TABLE sellers ADD COLUMN auto_approve TINYINT(1) NOT NULL DEFAULT 0');
+    }
     $done = true;
 }
 

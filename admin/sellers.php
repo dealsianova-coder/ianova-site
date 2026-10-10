@@ -8,6 +8,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     admin_check_csrf();
     $id = (int) $_POST['id'];
     $action = $_POST['status_action'] ?? '';
+    if ($action === 'auto_on' || $action === 'auto_off') {
+        $pdo->prepare('UPDATE sellers SET auto_approve = ? WHERE id = ?')->execute([$action === 'auto_on' ? 1 : 0, $id]);
+        $_SESSION['seller_mail_note'] = $action === 'auto_on'
+            ? 'Auto-approve is ON: new and edited products from this seller go live without review.'
+            : 'Auto-approve is OFF: this seller\'s products wait for your approval.';
+    }
     if (in_array($action, ['approved', 'rejected', 'suspended'], true)) {
         $cur = $pdo->prepare('SELECT business_name, email, status FROM sellers WHERE id = ?');
         $cur->execute([$id]);
@@ -47,6 +53,7 @@ if (!empty($_SESSION['seller_mail_note'])): ?>
 <td><?= admin_h($s['created_at']) ?></td>
 <td>
 <a class="btn" style="margin-right:6px" href="seller_messages.php?id=<?= intval($s['id']) ?>">Messages<?= intval($s['unread']) > 0 ? ' (' . intval($s['unread']) . ' new)' : '' ?></a>
+<form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>"><input type="hidden" name="id" value="<?= intval($s['id']) ?>"><input type="hidden" name="status_action" value="<?= !empty($s['auto_approve']) ? 'auto_off' : 'auto_on' ?>"><button class="btn" style="margin-right:6px"><?= !empty($s['auto_approve']) ? 'Auto-approve: ON' : 'Auto-approve: OFF' ?></button></form>
 <?php if ($s['status'] === 'pending'): ?>
 <form method="post" style="display:inline">
 <input type="hidden" name="csrf" value="<?= admin_csrf() ?>">

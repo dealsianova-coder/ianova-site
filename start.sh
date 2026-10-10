@@ -16,7 +16,7 @@ $ADMIN -u root ping >/dev/null 2>&1 || { echo "MariaDB did not start."; exit 1; 
 [ "$1" = "--db-only" ] && exit 0
 SOCK=$($CLIENT -u root -N -e "SELECT @@socket" 2>/dev/null)
 tmux kill-session -t ianova 2>/dev/null
-tmux new-session -d -s ianova "cd '$SITE' && php -d pdo_mysql.default_socket='$SOCK' -d mysqli.default_socket='$SOCK' -S 127.0.0.1:8080"
+tmux new-session -d -s ianova "cd '$SITE' && php -d upload_max_filesize=8M -d post_max_size=10M -d pdo_mysql.default_socket='$SOCK' -d mysqli.default_socket='$SOCK' -S 127.0.0.1:8080"
 sleep 2
 R=$(curl -s http://127.0.0.1:8080/api/categories.php)
 case "$R" in

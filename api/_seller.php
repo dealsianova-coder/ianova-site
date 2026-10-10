@@ -17,7 +17,7 @@ function require_seller(PDO $pdo): array {
     $token = bearer();
     if ($token === '') fail('Please sign in.', 401);
     $stmt = $pdo->prepare(
-        'SELECT s.id, s.business_name, s.email, s.status FROM seller_api_tokens t
+        'SELECT s.id, s.business_name, s.email, s.status, s.auto_approve FROM seller_api_tokens t
          JOIN sellers s ON s.id = t.seller_id
          WHERE t.token_hash = ? AND t.expires_at > NOW() LIMIT 1'
     );
