@@ -1,1 +1,174 @@
-/* Merged into style.css — kept as an empty file so old links do not 404. */
+/* IANOVA storefront theme: same look as the mobile app.
+   Loaded after style.css, so everything here wins. */
+:root{
+  --ink:#0F0F12;
+  --emerald:#0F0F12;
+  --emerald-light:#2B2E38;
+  --amber:#FFB400;
+  --coral:#E5173F;
+  --paper:#FAFAFB;
+  --paper-alt:#FFFFFF;
+  --ink-soft:#5F6575;
+  --line:#E9EBEF;
+  --radius:22px;
+  --soft:#F3F4F7;
+  --blush:#FDE8EF;
+  --sky:#E6F0FF;
+  --sand:#FFF1D6;
+  --rose-tint:#FFF1F4;
+  --success:#12A150;
+  --danger:#E5173F;
+  --brand-green:#2FA84F;
+}
+
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);}
+h1,h2,h3,.display{font-family:'Inter',system-ui,sans-serif;font-weight:800;letter-spacing:-0.025em;}
+.mono{font-family:'Inter',system-ui,sans-serif;}
+.barcode-divider,.scallop{display:none;}
+
+/* ---------- top ticker ---------- */
+body .promo-ticker{background:var(--blush);color:var(--ink);font-family:'Inter',sans-serif;font-size:12.5px;font-weight:700;letter-spacing:.02em;}
+
+/* ---------- header ---------- */
+body .site-header{background:#fff;border-bottom:1px solid var(--line);box-shadow:none;}
+body .site-header .logo{font-family:'Inter',sans-serif;font-weight:800;letter-spacing:.16em;color:var(--ink);}
+body .site-header .logo .dot,body .foot-logo .dot{color:var(--brand-green);}
+body .site-header .search-bar{background:#fff;border:1px solid var(--line);border-radius:999px;overflow:hidden;box-shadow:none;}
+body .site-header .search-bar button{background:var(--ink);color:#fff;border-radius:999px;font-weight:700;}
+body .site-header .nav-action{border-radius:16px;transition:background .15s;}
+body .site-header .nav-action:hover{background:var(--soft);}
+body .site-header .nav-action-icon{background:var(--soft);border-radius:50%;}
+body .site-header .cart-count,body .cart-count{background:var(--danger);color:#fff;border-radius:999px;font-weight:800;}
+body .site-header .nav-bottom{background:#fff;border-top:1px solid var(--line);}
+body .site-header .shop-menu{background:var(--ink);color:#fff;border-radius:999px;font-weight:700;}
+body .site-header .cat-nav a{border-radius:999px;font-weight:600;color:var(--ink-soft);}
+body .site-header .cat-nav a:hover{background:var(--soft);color:var(--ink);}
+
+/* ---------- buttons ---------- */
+body .btn{background:var(--ink);color:#fff;border:1px solid var(--ink);border-radius:999px;font-weight:800;padding:13px 24px;letter-spacing:0;}
+body .btn:hover{background:#2B2E38;border-color:#2B2E38;color:#fff;}
+body .btn-amber{background:var(--ink);color:#fff;border-color:var(--ink);}
+body .btn-ghost{background:#fff;color:var(--ink);border:1px solid var(--line);}
+body .btn-ghost:hover{background:var(--soft);color:var(--ink);}
+
+/* ---------- hero / top offers ---------- */
+body .top-offers-shell,body .hero{border-radius:28px;}
+body .top-offer-slide{background:var(--blush);color:var(--ink);}
+body .top-offer-slide:nth-child(3n+2){background:var(--sky);}
+body .top-offer-slide:nth-child(3n){background:var(--sand);}
+body .top-offer-copy h1,body .top-offer-copy p,body .top-offer-price strong,body .top-offer-price span,body .top-offer-kicker{color:var(--ink);}
+body .top-offer-price b,body .top-offer-save{background:var(--danger);color:#fff;border-radius:999px;font-weight:800;}
+body .top-offer-link{background:var(--ink);color:#fff;border-radius:999px;font-weight:800;}
+body .top-offer-visual img{border-radius:24px;}
+body .top-offer-dot.is-active,body .offer-dot.is-active{background:var(--ink);}
+body .top-offer-arrow,body .offer-arrow{background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:50%;}
+
+/* ---------- section headings ---------- */
+body .section-head h2{font-weight:800;letter-spacing:-0.03em;}
+body .section-head .tag,body .page-head .tag,body footer .tag{background:var(--blush);color:var(--ink);border-radius:999px;font-weight:700;}
+body .section-link{color:var(--ink);font-weight:700;}
+
+/* ---------- categories ---------- */
+body .cat-card{background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:none;transition:transform .15s,box-shadow .15s;}
+body .cat-card:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(15,15,18,.08);}
+body .cat-card .emoji{width:58px;height:58px;border-radius:50%;background:var(--soft);display:grid;place-items:center;margin-left:auto;margin-right:auto;}
+
+/* ---------- trust strip ---------- */
+body .trust-strip{background:#fff;border:1px solid var(--line);border-radius:22px;}
+body .trust-icon{background:var(--soft);border-radius:50%;}
+
+/* ---------- flash deals ---------- */
+body .flash{background:var(--rose-tint);color:var(--ink);border-radius:28px;}
+body .flash-bar{background:transparent;color:var(--ink);}
+body .flash-left h3{color:var(--ink);}
+body .countdown .u{background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:14px;}
+body .countdown .u small{color:var(--ink-soft);}
+
+/* ---------- product cards ---------- */
+body .product-card{background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:none;transition:transform .15s,box-shadow .15s;}
+body .product-card:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(15,15,18,.09);}
+body .product-media{border-radius:20px;overflow:hidden;}
+body .product-media .badge{background:var(--danger);color:#fff;border-radius:999px;font-weight:800;padding:5px 11px;}
+body .product-media .badge::after{content:none;display:none;}
+body .wishlist-btn{background:#fff;border:1px solid var(--line);border-radius:50%;color:var(--ink);}
+body .wishlist-btn.is-saved{color:var(--danger);}
+body .product-body h4{font-weight:700;color:var(--ink);}
+body .product-body .cat{color:var(--ink-soft);}
+body .stars{color:var(--amber);}
+body .price-row .now{font-weight:800;color:var(--ink);}
+body .price-row .was{color:#9AA0AE;text-decoration:line-through;}
+body .add-btn{background:var(--ink);color:#fff;border-radius:14px;font-weight:800;}
+body .add-btn:hover{background:#2B2E38;}
+
+/* ---------- combos / newsletter ---------- */
+body .combo-card{background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:none;}
+body .newsletter{background:var(--sky);color:var(--ink);border-radius:28px;}
+body .newsletter h3,body .newsletter p{color:var(--ink);}
+body .nl-form input{border:1px solid var(--line);border-radius:999px;background:#fff;}
+
+/* ---------- product page ---------- */
+body .pd-media{border-radius:28px;overflow:hidden;border:1px solid var(--line);}
+body .pd-info h1{font-weight:800;letter-spacing:-0.03em;}
+body .pd-price .now{font-weight:900;letter-spacing:-0.03em;}
+body .pd-price .was{color:#9AA0AE;text-decoration:line-through;}
+body .pd-price .save{color:var(--success);font-weight:700;}
+
+/* ---------- cart ---------- */
+body .cart-row,body .summary-card{background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:none;}
+body .qty-form input{border:1px solid var(--line);border-radius:12px;}
+body .summary-row.total{font-weight:800;}
+body .empty-state{background:#fff;border:1px solid var(--line);border-radius:28px;}
+
+/* ---------- footer ---------- */
+body footer{background:var(--ink);}
+
+/* ---------- color / size options ---------- */
+body .opt-group{margin:18px 0 6px;}
+body .opt-label{font-size:13px;font-weight:600;color:var(--ink-soft);margin-bottom:8px;}
+body .opt-label b{color:var(--ink);}
+body .opt-chips{display:flex;flex-wrap:wrap;gap:8px;}
+body .opt-chip{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border:1.5px solid var(--line);border-radius:999px;background:#fff;font-weight:700;font-size:14px;color:var(--ink);}
+body a.opt-chip:hover{border-color:var(--ink);}
+body .opt-chip.is-active{border-color:var(--ink);background:var(--soft);}
+body .opt-chip.is-out{color:#B5BAC6;text-decoration:line-through;cursor:not-allowed;background:#FAFAFB;}
+body .opt-dot{width:16px;height:16px;border-radius:50%;border:1px solid rgba(15,15,18,.18);display:inline-block;}
+
+/* ---------- logo ---------- */
+body .site-header .logo{display:flex;align-items:center;gap:10px;}
+body .site-header .logo-mark{border-radius:11px;flex:none;}
+
+/* ---------- announcement bar ---------- */
+body .announce{background:var(--ink);color:#fff;text-align:center;padding:10px 16px;font-weight:700;font-size:13.5px;}
+
+/* ---------- home banners ---------- */
+body .banner-strip{padding:22px 0 0;}
+body .banner-track{display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;}
+body .banner-track::-webkit-scrollbar{display:none;}
+body .banner-card{flex:0 0 min(560px,88vw);scroll-snap-align:start;display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:190px;padding:22px 24px;border-radius:28px;color:var(--ink);text-decoration:none;overflow:hidden;}
+body .banner-blush{background:var(--blush);} body .banner-sky{background:var(--sky);} body .banner-sand{background:var(--sand);} body .banner-rose{background:var(--rose-tint);}
+body .banner-copy h3{font-size:clamp(22px,3vw,30px);line-height:1.1;margin:0 0 6px;}
+body .banner-copy p{margin:0 0 14px;color:var(--ink-soft);font-weight:600;}
+body .banner-btn{display:inline-block;background:var(--ink);color:#fff;border-radius:999px;padding:10px 18px;font-weight:800;font-size:14px;}
+body .banner-card img{width:140px;height:140px;object-fit:cover;border-radius:24px;border:3px solid rgba(255,255,255,.85);flex:none;}
+
+/* logo image */
+body .site-header .logo-img{height:34px;width:auto;display:block;}
+
+/* IANOVA header layout fix: logo + menu + actions aligned, search on its own row on phones */
+body .site-header .nav-inner{align-items:center;}
+body .site-header .logo{flex:0 0 auto;display:flex;align-items:center;line-height:0;padding:6px 0;}
+body .site-header .nav-inner{padding-top:18px;padding-bottom:14px;}
+body .site-header .logo-img{height:40px;width:auto;max-width:none;display:block;}
+@media (max-width:820px){
+  body .site-header .nav-inner{
+    display:grid;grid-template-columns:auto 1fr auto;
+    grid-template-areas:"menu logo actions" "search search search";
+    align-items:center;gap:8px 10px;padding:16px 14px 12px;
+  }
+  body .site-header .main-menu-btn{grid-area:menu;}
+  body .site-header .logo{grid-area:logo;justify-content:flex-start;align-self:center;}
+  body .site-header .logo-img{height:30px;}
+  body .site-header .nav-actions{grid-area:actions;justify-self:end;}
+  body .site-header .search-bar{grid-area:search;width:100%;max-width:none;}
+}
+@media (max-width:360px){body .site-header .logo-img{height:26px;}}

@@ -14,7 +14,7 @@ try {
     // Settings table may not exist yet; fall back to config.php values.
 }
 
-$delivery_banner = $site_settings['delivery_banner'] ?? 'Free delivery on orders over {currency}{threshold}';
+$delivery_banner = $site_settings['delivery_banner'] ?? '✦ FREE DELIVERY ON ORDERS OVER {currency}{threshold}';
 $delivery_banner = str_replace(
     ['{currency}', '{threshold}'],
     [CURRENCY, number_format((float)($site_settings['free_delivery_threshold'] ?? FREE_DELIVERY_THRESHOLD), 0)],
@@ -25,15 +25,16 @@ $delivery_banner = str_replace(
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#FAFAFB">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= isset($page_title) ? h($page_title) . ' — ' . SITE_NAME : SITE_NAME . ' — ' . SITE_SLOGAN ?></title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="assets/css/style.css?v=3">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/ianova-theme.css?v=5">
+<link rel="stylesheet" href="assets/css/ianova-header-fix.css?v=2">
 <link rel="icon" type="image/png" href="assets/img/favicon.png">
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
 </head>
@@ -44,13 +45,13 @@ $delivery_banner = str_replace(
 <div class="promo-ticker">
   <div class="track">
     <span><?= h($delivery_banner) ?></span>
-    <span>Secure payments</span>
-    <span>Verified sellers</span>
-    <span>Fast delivery across kenya</span>
+    <span>✦ SECURE PAYMENTS</span>
+    <span>✦ VERIFIED SELLERS</span>
+    <span>✦ FAST DELIVERY ACROSS KENYA</span>
     <span><?= h($delivery_banner) ?></span>
-    <span>Secure payments</span>
-    <span>Verified sellers</span>
-    <span>Fast delivery across kenya</span>
+    <span>✦ SECURE PAYMENTS</span>
+    <span>✦ VERIFIED SELLERS</span>
+    <span>✦ FAST DELIVERY ACROSS KENYA</span>
   </div>
 </div>
 
@@ -63,8 +64,7 @@ $delivery_banner = str_replace(
     </button>
 
     <a href="index.php" class="logo">
-      <img class="logo-mark" src="assets/img/ianova-mark.png" alt="" width="38" height="38">
-      <span class="logo-word"><?= SITE_NAME ?></span>
+      <img class="logo-img" src="assets/img/ianova-wordmark.png" alt="<?= h(SITE_NAME) ?>" height="34">
     </a>
 
     <form class="search-bar" action="search.php" method="get">

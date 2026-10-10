@@ -35,3 +35,25 @@ function seller_json(array $s): array {
         'status' => $s['status'],
     ];
 }
+
+/** Same as require_seller, but only for approved sellers (products, orders, sales). */
+function require_approved_seller(PDO $pdo): array {
+    $seller = require_seller($pdo);
+    if ($seller['status'] !== 'approved') {
+        fail('Your seller account is not approved yet.', 403);
+    }
+    return $seller;
+}
+
+function seller_slug(PDO $pdo, string $name, int $ignoreId = 0): string {
+    $base = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower($name)), '-');
+    if ($base === '') $base = 'product';
+    $slug = $base;
+    for ($n = 2; $n < 60; $n++) {
+        $q = $pdo->prepare('SELECT id FROM products WHERE slug = ? AND id <> ?');
+        $q->execute([$slug, $ignoreId]);
+        if (!$q->fetch()) return $slug;
+        $slug = $base . '-' . $n;
+    }
+    return $base . '-' . time();
+}

@@ -1,0 +1,18 @@
+/* IANOVA header layout fix: logo + menu + actions aligned, search on its own row on phones */
+body .site-header .nav-inner{align-items:center;}
+body .site-header .logo{flex:0 0 auto;display:flex;align-items:center;line-height:0;padding:6px 0;}
+body .site-header .nav-inner{padding-top:18px;padding-bottom:14px;}
+body .site-header .logo-img{height:40px;width:auto;max-width:none;display:block;}
+@media (max-width:820px){
+  body .site-header .nav-inner{
+    display:grid;grid-template-columns:auto 1fr auto;
+    grid-template-areas:"menu logo actions" "search search search";
+    align-items:center;gap:8px 10px;padding:16px 14px 12px;
+  }
+  body .site-header .main-menu-btn{grid-area:menu;}
+  body .site-header .logo{grid-area:logo;justify-content:flex-start;align-self:center;}
+  body .site-header .logo-img{height:30px;}
+  body .site-header .nav-actions{grid-area:actions;justify-self:end;}
+  body .site-header .search-bar{grid-area:search;width:100%;max-width:none;}
+}
+@media (max-width:360px){body .site-header .logo-img{height:26px;}}
