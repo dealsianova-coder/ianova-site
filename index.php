@@ -18,9 +18,12 @@ require 'includes/header.php';
 ?>
 
 <?php
+$banners = [];
+try { $banners = $pdo->query("SELECT * FROM banners WHERE is_active = 1 ORDER BY sort_order, id")->fetchAll(); } catch (Throwable $e) { $banners = []; }
+
 $video_ad_on = (($site_settings['video_ad_enabled'] ?? '0') === '1') && !empty($site_settings['video_ad_src']);
 if ($video_ad_on): ?>
-<div class="video-ad" id="videoAd" data-interval-min="<?= (int) ($site_settings['video_ad_interval_minutes'] ?? 3) ?>" data-min-seconds="<?= (int) ($site_settings['video_ad_min_seconds'] ?? 30) ?>">
+<div class="video-ad" id="videoAd" data-interval-min="<?= (int) ($site_settings['video_ad_interval_minutes'] ?? 3) ?>" data-min-seconds="<?= (int) ($site_settings['video_ad_min_seconds'] ?? 30) ?>" data-no-banners="<?= empty($banners) ? '1' : '0' ?>">
   <div class="wrap video-ad-inner">
     <span class="video-ad-tag">Ad</span>
     <video id="videoAdEl" src="<?= h($site_settings['video_ad_src']) ?>" playsinline muted autoplay controls></video>
@@ -28,10 +31,7 @@ if ($video_ad_on): ?>
 </div>
 <?php endif; ?>
 
-<?php
-$banners = [];
-try { $banners = $pdo->query("SELECT * FROM banners WHERE is_active = 1 ORDER BY sort_order, id")->fetchAll(); } catch (Throwable $e) { $banners = []; }
-if ($banners): ?>
+<?php if ($banners): ?>
 <section class="banner-strip"><div class="wrap"><div class="banner-track">
 <?php foreach ($banners as $bn):
     $href = '#'; $img = (string) $bn['image'];

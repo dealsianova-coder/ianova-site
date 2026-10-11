@@ -282,6 +282,17 @@ document.querySelectorAll('.offer-slide a[href*="product.php"]').forEach(functio
   var hero = document.querySelector('.hero');
   var intervalMin = parseFloat(ad.getAttribute('data-interval-min')) || 3;
   var minSeconds = parseFloat(ad.getAttribute('data-min-seconds')) || 30;
+  var noBanners = ad.getAttribute('data-no-banners') === '1';
+
+  // No banners configured: the video ad fills that slot permanently, looping
+  // on its own. No interval-based interruption, nothing to toggle back to.
+  if (noBanners) {
+    ad.classList.add('is-visible');
+    video.muted = true;
+    video.loop = true;
+    try { video.play(); } catch (e) {}
+    return;
+  }
 
   function toggleBanners(hide) {
     if (bannerStrip) bannerStrip.style.display = hide ? 'none' : '';
