@@ -300,6 +300,7 @@ document.querySelectorAll('.offer-slide a[href*="product.php"]').forEach(functio
   function playAd() {
     toggleBanners(true);
     ad.classList.add('is-visible');
+    video.muted = true; // always start muted; a viewer's unmute from last time doesn't carry over
     try { video.currentTime = 0; video.play(); } catch (e) {}
     var started = Date.now();
     var finished = false;
@@ -309,6 +310,8 @@ document.querySelectorAll('.offer-slide a[href*="product.php"]').forEach(functio
       var elapsedMs = Date.now() - started;
       var waitMs = Math.max(0, minSeconds * 1000 - elapsedMs);
       setTimeout(function () {
+        video.pause();
+        video.muted = true;
         ad.classList.remove('is-visible');
         toggleBanners(false);
         reshuffleBanners();
