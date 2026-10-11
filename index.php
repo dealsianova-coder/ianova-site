@@ -11,9 +11,22 @@ foreach ($counts_stmt as $row) $counts[$row['category_id']] = $row['n'];
 
 $flash_deals = $pdo->query("SELECT * FROM products WHERE is_flash_deal = 1 AND status='approved' AND " . dedupe_sql() . " ORDER BY created_at DESC LIMIT 8")->fetchAll();
 
+$all_products = $pdo->query("SELECT * FROM products WHERE status='approved' AND " . dedupe_sql() . " ORDER BY created_at DESC LIMIT 24")->fetchAll();
+
 $page_title = null; // use default title
 require 'includes/header.php';
 ?>
+
+<?php
+$video_ad_on = (($site_settings['video_ad_enabled'] ?? '0') === '1') && !empty($site_settings['video_ad_src']);
+if ($video_ad_on): ?>
+<div class="video-ad" id="videoAd" data-interval-min="<?= (int) ($site_settings['video_ad_interval_minutes'] ?? 3) ?>" data-min-seconds="<?= (int) ($site_settings['video_ad_min_seconds'] ?? 30) ?>">
+  <div class="wrap video-ad-inner">
+    <span class="video-ad-tag">Ad</span>
+    <video id="videoAdEl" src="<?= h($site_settings['video_ad_src']) ?>" playsinline muted autoplay controls></video>
+  </div>
+</div>
+<?php endif; ?>
 
 <?php
 $banners = [];
@@ -105,6 +118,20 @@ if ($banners): ?>
   </div>
 </section>
 <?php endif; ?>
+
+<section class="section" id="all-products">
+  <div class="wrap">
+    <div class="section-head">
+      <div><span class="tag">Catalog</span><h2>All products</h2></div>
+      <a href="search.php" class="section-link">Browse everything</a>
+    </div>
+    <div class="product-grid">
+      <?php if ($all_products): foreach ($all_products as $p): echo render_product_card($p); endforeach; else: ?>
+        <p class="muted">No products listed yet.</p>
+      <?php endif; ?>
+    </div>
+  </div>
+</section>
 
 <section class="combo">
   <div class="wrap">

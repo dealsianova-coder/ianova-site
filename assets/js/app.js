@@ -271,3 +271,53 @@ document.querySelectorAll('.offer-slide a[href*="product.php"]').forEach(functio
     });
   }
 })();
+
+// Admin-controlled video ad: interrupts the banner carousel on a timer,
+// plays for at least the configured minimum, then resumes and reshuffles banners.
+(function () {
+  var ad = document.getElementById('videoAd');
+  if (!ad) return;
+  var video = document.getElementById('videoAdEl');
+  var bannerStrip = document.querySelector('.banner-strip');
+  var hero = document.querySelector('.hero');
+  var intervalMin = parseFloat(ad.getAttribute('data-interval-min')) || 3;
+  var minSeconds = parseFloat(ad.getAttribute('data-min-seconds')) || 30;
+
+  function toggleBanners(hide) {
+    if (bannerStrip) bannerStrip.style.display = hide ? 'none' : '';
+    if (hero) hero.style.display = hide ? 'none' : '';
+  }
+
+  function reshuffleBanners() {
+    var track = document.querySelector('.banner-track');
+    if (!track) return;
+    var cards = Array.prototype.slice.call(track.children);
+    cards.sort(function () { return Math.random() - 0.5; });
+    cards.forEach(function (c) { track.appendChild(c); });
+    track.scrollTo({ left: 0 });
+  }
+
+  function playAd() {
+    toggleBanners(true);
+    ad.classList.add('is-visible');
+    try { video.currentTime = 0; video.play(); } catch (e) {}
+    var started = Date.now();
+    var finished = false;
+    function finish() {
+      if (finished) return;
+      finished = true;
+      var elapsedMs = Date.now() - started;
+      var waitMs = Math.max(0, minSeconds * 1000 - elapsedMs);
+      setTimeout(function () {
+        ad.classList.remove('is-visible');
+        toggleBanners(false);
+        reshuffleBanners();
+      }, waitMs);
+    }
+    video.addEventListener('ended', finish, { once: true });
+    // Safety net in case 'ended' never fires (e.g. looping video).
+    setTimeout(finish, minSeconds * 1000);
+  }
+
+  setInterval(playAd, intervalMin * 60 * 1000);
+})();

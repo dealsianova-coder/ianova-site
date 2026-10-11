@@ -255,9 +255,9 @@ tr:last-child td{border-bottom:0}
 .nl-form input{flex:1}
 footer{margin-top:24px;background:var(--surface);border-top:1px solid var(--line);padding:36px 0 20px}
 .footer-grid{display:grid;grid-template-columns:1.6fr repeat(4,1fr);gap:24px}
-.foot-logo{font-weight:900;font-size:22px;letter-spacing:-.03em}
+.foot-logo{font-weight:900;font-size:22px;letter-spacing:-.03em;color:#fff}
 footer .tag{color:var(--ink-soft);max-width:34ch;margin-top:8px}
-footer h5{font-size:13px;margin-bottom:10px}
+footer h5{font-size:13px;margin-bottom:10px;color:#fff}
 footer ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 footer li a{color:var(--ink-soft);font-size:14px}
 footer li a:hover{color:var(--ink)}
