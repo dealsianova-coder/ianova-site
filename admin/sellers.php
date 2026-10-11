@@ -20,6 +20,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $seller = $cur->fetch();
 
         $pdo->prepare('UPDATE sellers SET status = ? WHERE id = ?')->execute([$action, $id]);
+        require_once __DIR__ . '/../includes/seller_ops.php';
+        ops_seller_status_changed($pdo, $id, (string) ($seller['status'] ?? ''), $action);
 
         // Email the seller when they are approved, or when a pending application is rejected.
         if ($seller && (($action === 'approved' && $seller['status'] !== 'approved') || ($action === 'rejected' && $seller['status'] === 'pending'))) {

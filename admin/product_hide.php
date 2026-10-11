@@ -1,6 +1,7 @@
 <?php
 require 'includes/auth.php';
+require_once __DIR__ . '/../includes/seller_ops.php';
 $id=(int)($_GET['id']??0);
-if($id){$s=$pdo->prepare("UPDATE products SET status='hidden' WHERE id=?");$s->execute([$id]);}
+if($id){$old=ops_product_status($pdo,$id);$s=$pdo->prepare("UPDATE products SET status='hidden' WHERE id=?");$s->execute([$id]);ops_product_status_changed($pdo,$id,$old,'hidden');}
 header('Location: products.php');
 exit;

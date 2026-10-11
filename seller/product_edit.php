@@ -39,6 +39,13 @@ if ($id) {
     }
 }
 
+require_once __DIR__ . '/../includes/seller_ops.php';
+if (($seller['status'] ?? '') === 'suspended' || ($product && ops_product_locked($product))) {
+    $_SESSION['ops_flash'] = 'This is restricted by the admin. You cannot change it until the admin approves it. Use "Request review" on your dashboard.';
+    header('Location: index.php');
+    exit;
+}
+
 $categories = $pdo->query('SELECT * FROM categories ORDER BY sort_order, name')->fetchAll();
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

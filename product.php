@@ -38,9 +38,62 @@ require 'includes/header.php';
 
 <section class="section">
   <div class="wrap pd-layout">
+    <?php
+    require_once 'includes/gallery.php';
+    gallery_ensure($pdo);
+    $galMain = (string) ($product['image'] ?? ($product['image_url'] ?? ''));
+    $galExtra = gallery_for($pdo, [(int) $product['id']]);
+    $galImgs = gallery_list($galMain, $galExtra[(int) $product['id']] ?? []);
+    $galN = count($galImgs);
+    ?>
+    <?php if ($galN === 0): ?>
     <div class="pd-media" style="background:<?= h($product['bg_color']) ?>;">
       <?= h($product['emoji']) ?>
     </div>
+    <?php else: ?>
+    <style>
+      .pd-gal{position:relative;border-radius:var(--r-xl);overflow:hidden;border:1px solid var(--line);background:<?= h($product['bg_color']) ?>}
+      .pd-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;aspect-ratio:1/1}
+      .pd-track::-webkit-scrollbar{display:none}
+      .pd-track img{flex:0 0 100%;width:100%;height:100%;object-fit:cover;scroll-snap-align:center}
+      .pd-nav{position:absolute;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;border:0;background:rgba(255,255,255,.92);box-shadow:0 2px 10px rgba(0,0,0,.18);font-size:24px;line-height:1;cursor:pointer}
+      .pd-nav.prev{left:12px}.pd-nav.next{right:12px}
+      .pd-count{position:absolute;right:12px;bottom:12px;background:rgba(0,0,0,.55);color:#fff;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700}
+      .pd-thumbs{display:flex;gap:10px;margin-top:12px;overflow-x:auto}
+      .pd-thumb{flex:0 0 68px;height:68px;border-radius:12px;overflow:hidden;border:2px solid transparent;padding:0;background:none;cursor:pointer;opacity:.7}
+      .pd-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+      .pd-thumb.on{border-color:var(--ink,#0f0f12);opacity:1}
+    </style>
+    <div class="pd-media-wrap">
+      <div class="pd-gal">
+        <div class="pd-track" id="pdTrack">
+          <?php foreach ($galImgs as $gi): ?><img src="<?= h($gi) ?>" alt="<?= h($product['name']) ?>"><?php endforeach; ?>
+        </div>
+        <?php if ($galN > 1): ?>
+        <button type="button" class="pd-nav prev" aria-label="Previous photo">&#8249;</button>
+        <button type="button" class="pd-nav next" aria-label="Next photo">&#8250;</button>
+        <div class="pd-count" id="pdCount">1 / <?= $galN ?></div>
+        <?php endif; ?>
+      </div>
+      <?php if ($galN > 1): ?>
+      <div class="pd-thumbs">
+        <?php foreach ($galImgs as $gk => $gi): ?><button type="button" class="pd-thumb<?= $gk === 0 ? ' on' : '' ?>" aria-label="Photo <?= $gk + 1 ?>"><img src="<?= h($gi) ?>" alt=""></button><?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+    </div>
+    <script>
+    (function(){
+      var t=document.getElementById('pdTrack'); if(!t) return;
+      var n=t.children.length, c=document.getElementById('pdCount'), th=document.querySelectorAll('.pd-thumb');
+      function cur(){return Math.round(t.scrollLeft/t.clientWidth);}
+      function go(i){i=Math.max(0,Math.min(n-1,i));t.scrollTo({left:i*t.clientWidth,behavior:'smooth'});}
+      t.addEventListener('scroll',function(){var i=cur(); if(c)c.textContent=(i+1)+' / '+n; th.forEach(function(e,k){e.classList.toggle('on',k===i);});});
+      var p=document.querySelector('.pd-nav.prev'), x=document.querySelector('.pd-nav.next');
+      if(p)p.onclick=function(){go(cur()-1);}; if(x)x.onclick=function(){go(cur()+1);};
+      th.forEach(function(e,k){e.onclick=function(){go(k);};});
+    })();
+    </script>
+    <?php endif; ?>
     <div class="pd-info">
       <span class="cat"><?= h($product['category_name']) ?> · sold by <?= h($product['seller_name']) ?></span>
       <h1><?= h($product['name']) ?></h1>

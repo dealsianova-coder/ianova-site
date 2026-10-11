@@ -19,6 +19,16 @@ $o = $pdo->prepare('SELECT ' . product_cols($pdo) . ' FROM products p WHERE p.st
 $o->execute([(int) $p['category_id'], $sellerId, $p['name']]);
 $options = $o->fetchAll();
 
+require_once __DIR__ . '/../includes/gallery.php';
+gallery_ensure($pdo);
+$galleryIds = array_merge([$id], array_map('intval', array_column($options, 'id')));
+$galleries = gallery_for($pdo, $galleryIds);
+$p['images'] = gallery_list((string) ($p['image'] ?? ''), $galleries[$id] ?? []);
+foreach ($options as &$galleryOpt) {
+    $galleryOpt['images'] = gallery_list((string) ($galleryOpt['image'] ?? ''), $galleries[(int) $galleryOpt['id']] ?? []);
+}
+unset($galleryOpt);
+
 // Suggestions: same category first (same subcategory ahead of the rest), then other products.
 $nameKey = strtolower(trim((string) $p['name']));
 $order = has_subcategory($pdo) ? 'CASE WHEN p.subcategory <> "" AND p.subcategory = ? THEN 0 ELSE 1 END, ' : '';
