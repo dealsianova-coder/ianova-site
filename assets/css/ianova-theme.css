@@ -182,3 +182,5 @@ body .video-ad.is-visible{display:block;}
 body .video-ad-inner{position:relative;border-radius:28px;overflow:hidden;background:#000;max-width:var(--wrap);margin:0 auto;}
 body .video-ad-tag{position:absolute;top:12px;left:12px;z-index:2;background:rgba(0,0,0,.65);color:#fff;font-size:11px;font-weight:800;letter-spacing:.08em;padding:4px 10px;border-radius:999px;}
 body .video-ad video{width:100%;max-height:420px;display:block;border-radius:28px;background:#000;}
+body .video-ad-cta{position:absolute;bottom:14px;right:14px;z-index:2;background:var(--amber,#f0a63a);color:#17352c;font-weight:800;font-size:13px;padding:9px 16px;border-radius:999px;text-decoration:none;box-shadow:0 6px 16px rgba(0,0,0,.35);}
+body .video-ad-cta:hover{filter:brightness(1.05);}

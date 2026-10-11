@@ -22,11 +22,29 @@ $banners = [];
 try { $banners = $pdo->query("SELECT * FROM banners WHERE is_active = 1 ORDER BY sort_order, id")->fetchAll(); } catch (Throwable $e) { $banners = []; }
 
 $video_ad_on = (($site_settings['video_ad_enabled'] ?? '0') === '1') && !empty($site_settings['video_ad_src']);
-if ($video_ad_on): ?>
+if ($video_ad_on):
+    $video_ad_href = '';
+    $vLinkType = $site_settings['video_ad_link_type'] ?? 'none';
+    $vLinkValue = $site_settings['video_ad_link_value'] ?? '';
+    if ($vLinkType === 'product' && $vLinkValue) {
+        $vps = $pdo->prepare('SELECT slug FROM products WHERE id = ?'); $vps->execute([(int) $vLinkValue]);
+        $vslug = $vps->fetchColumn();
+        if ($vslug) $video_ad_href = 'product.php?slug=' . urlencode($vslug);
+    } elseif ($vLinkType === 'category' && $vLinkValue) {
+        $vcs = $pdo->prepare('SELECT slug FROM categories WHERE id = ?'); $vcs->execute([(int) $vLinkValue]);
+        $vcslug = $vcs->fetchColumn();
+        if ($vcslug) $video_ad_href = 'category.php?slug=' . urlencode($vcslug);
+    } elseif ($vLinkType === 'url' && $vLinkValue) {
+        $video_ad_href = $vLinkValue;
+    }
+    ?>
 <div class="video-ad" id="videoAd" data-interval-min="<?= (int) ($site_settings['video_ad_interval_minutes'] ?? 3) ?>" data-min-seconds="<?= (int) ($site_settings['video_ad_min_seconds'] ?? 30) ?>" data-no-banners="<?= empty($banners) ? '1' : '0' ?>">
   <div class="wrap video-ad-inner">
     <span class="video-ad-tag">Ad</span>
     <video id="videoAdEl" src="<?= h($site_settings['video_ad_src']) ?>" playsinline muted autoplay controls></video>
+    <?php if ($video_ad_href !== ''): ?>
+      <a class="video-ad-cta" href="<?= h($video_ad_href) ?>">Shop now →</a>
+    <?php endif; ?>
   </div>
 </div>
 <?php endif; ?>
