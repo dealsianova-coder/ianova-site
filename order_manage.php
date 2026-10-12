@@ -1,6 +1,8 @@
 <?php
 require 'config.php';
 require 'includes/functions.php';
+require_once __DIR__ . '/includes/seller_orders.php';
+ensure_seller_orders($pdo);
 
 if (empty($_SESSION['user_id'])) {
     header('Location: login.php?redirect=account.php');
@@ -40,8 +42,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'cancel') {
-        $pdo->prepare("UPDATE orders SET status = 'cancelled' WHERE id = ? AND user_id = ? AND status = 'pending'")
-            ->execute([$order_id, $user_id]);
+        // Cancelling gives the held stock back to the shelf.
+        set_order_status($pdo, $order_id, 'cancelled');
         header('Location: account.php?cancelled=1');
         exit;
     }
@@ -63,6 +65,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $new_total = 0;
                 foreach ($items as $item) {
                     $q = max(0, (int) ($qtys[$item['id']] ?? $item['quantity']));
+
+                    // Keep the held stock in step with the new quantity.
+                    if (!empty($item['stock_reserved'])) {
+                        $delta = $q - (int) $item['quantity'];
+                        if ($delta > 0) {
+                            $take = $pdo->prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?');
+                            $take->execute([$delta, $item['product_id'], $delta]);
+                            if ($take->rowCount() < 1) {
+                                throw new OutOfStockException('Not enough stock for "' . $item['name'] . '" to increase the quantity.');
+                            }
+                        } elseif ($delta < 0) {
+                            $pdo->prepare('UPDATE products SET stock = stock + ? WHERE id = ?')->execute([-$delta, $item['product_id']]);
+                        }
+                    }
+
                     if ($q === 0) {
                         $pdo->prepare('DELETE FROM order_items WHERE id = ? AND order_id = ?')
                             ->execute([$item['id'], $order_id]);
@@ -87,8 +104,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->commit();
                 header('Location: account.php?updated=1');
                 exit;
+            } catch (OutOfStockException $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                $error = $e->getMessage();
             } catch (Exception $e) {
-                $pdo->rollBack();
+                if ($pdo->inTransaction()) $pdo->rollBack();
                 $error = 'Could not update your order. Please try again.';
             }
         }
