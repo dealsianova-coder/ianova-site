@@ -14,4 +14,14 @@
   });
 })();
 </script>
+<script>
+document.addEventListener('click',function(e){
+  var t=e.target.closest('[data-zoom]'); if(!t) return;
+  e.preventDefault();
+  var o=document.createElement('div'); o.className='zoom-ov';
+  o.innerHTML='<img src="'+t.getAttribute('data-zoom')+'" alt=""><button type="button" aria-label="Close">×</button>';
+  o.addEventListener('click',function(){o.remove();});
+  document.body.appendChild(o);
+});
+</script>
 </body></html>

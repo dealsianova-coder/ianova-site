@@ -51,5 +51,7 @@ try {
     fail('Could not place your order. Please try again.', 500);
 }
 
+require_once __DIR__ . '/../includes/seller_ops.php';
+ops_ensure($pdo); // approves the sellers' parts automatically when their items are in stock
 out(['success' => true, 'order' => ['id' => $orderId, 'subtotal' => $subtotal, 'delivery' => $delivery,
                                      'total' => $total, 'status' => 'pending']], 201);

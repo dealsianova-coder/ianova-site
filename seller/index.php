@@ -1,60 +1,81 @@
 <?php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/_layout.php';
+$one = function (string $sql, array $p = []) use ($pdo) { try { $q = $pdo->prepare($sql); $q->execute($p); return (float) $q->fetchColumn(); } catch (Throwable $e) { return 0; } };
+$n = sel_counts($pdo, $seller_id);
+$rev = $one("SELECT COALESCE(SUM(oi.quantity*oi.unit_price),0) FROM order_items oi JOIN products p ON p.id=oi.product_id JOIN orders o ON o.id=oi.order_id WHERE p.seller_id=? AND o.status IN ('paid','shipped','delivered')", [$seller_id]);
+$tiles = [
+  ['📦', 'Products', (int) $one('SELECT COUNT(*) FROM products WHERE seller_id=?', [$seller_id]), 'products.php'],
+  ['🛒', 'Orders', (int) $one('SELECT COUNT(DISTINCT oi.order_id) FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE p.seller_id=?', [$seller_id]), 'orders.php'],
+  ['⚠️', 'Low stock (3 or less)', (int) $one("SELECT COUNT(*) FROM products WHERE seller_id=? AND stock<=3 AND status='approved'", [$seller_id]), 'products.php'],
+  ['💰', 'Confirmed sales', CURRENCY . number_format($rev, 2), 'orders.php'],
+];
+$attn = [
+  ['🛒', 'Orders waiting for you', $n['orders'], 'orders.php'],
+  ['💬', 'Unread admin messages', $n['messages'], 'messages.php'],
+  ['🔒', 'Products locked by admin', $n['locked'], 'products.php?status=locked'],
+  ['⏳', 'Products waiting for review', $n['pending'], 'products.php?status=pending'],
+];
+$attn_total = 0; foreach ($attn as $a) $attn_total += $a[2];
 
-if (empty($_SESSION['seller_id'])) {
-    header('Location: login.php');
-    exit;
+$rq = $pdo->prepare("SELECT o.id, COALESCE(o.guest_name,u.name,'Customer') customer, o.status, o.created_at,
+    (SELECT SUM(oi.quantity*oi.unit_price) FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=o.id AND p.seller_id=?) mine
+    FROM orders o LEFT JOIN users u ON u.id=o.user_id
+    WHERE EXISTS (SELECT 1 FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=o.id AND p.seller_id=?)
+    ORDER BY o.id DESC LIMIT 6");
+$rq->execute([$seller_id, $seller_id]);
+$recent = $rq->fetchAll();
+$thumbs = [];
+if ($recent) {
+    $ids = implode(',', array_map('intval', array_column($recent, 'id')));
+    $tq = $pdo->prepare("SELECT oi.order_id, p.image, p.emoji FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id IN ($ids) AND p.seller_id=?");
+    $tq->execute([$seller_id]);
+    foreach ($tq->fetchAll() as $t) $thumbs[$t['order_id']][] = $t;
 }
+$aq = $pdo->prepare('SELECT order_id FROM seller_order_approvals WHERE seller_id = ?');
+$aq->execute([$seller_id]);
+$approved = array_flip(array_map('intval', $aq->fetchAll(PDO::FETCH_COLUMN)));
 
-$seller_id = (int) $_SESSION['seller_id'];
-require_once __DIR__ . '/../includes/seller_ops.php';
-if (empty($_SESSION['ops_csrf'])) $_SESSION['ops_csrf'] = bin2hex(random_bytes(16));
+$autoMaster = ops_setting($pdo, 'auto_approve', '1') === '1';
+$autoMine = ops_seller_auto($pdo, $seller_id);
+$autoOn = $autoMaster && $autoMine;
+seller_head('Dashboard', 'index.php');
+?>
+<div class="blk attn-blk">
+  <div class="blk-head"><h2>Needs your attention</h2><?php if ($attn_total > 0): ?><span class="nbadge big"><?= (int) $attn_total ?></span><?php endif; ?></div>
+  <?php if ($attn_total === 0): ?>
+    <p class="muted" style="margin:0">All caught up. Nothing is waiting for you.</p>
+  <?php else: ?>
+  <div class="attn-grid">
+    <?php foreach ($attn as $a): if ($a[2] < 1) continue; ?>
+      <a class="attn-item" href="<?= $a[3] ?>"><span class="ai-icon"><?= $a[0] ?></span><span class="ai-text"><b><?= (int) $a[2] ?></b><small><?= $a[1] ?></small></span><span class="ai-go">›</span></a>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+</div>
 
-$stmt = $pdo->prepare('SELECT * FROM sellers WHERE id = ?');
-$stmt->execute([$seller_id]);
-$seller = $stmt->fetch();
+<div class="tiles">
+  <?php foreach ($tiles as $t): ?>
+    <a class="tile" href="<?= $t[3] ?>"><span class="t-icon"><?= $t[0] ?></span><span class="t-label"><?= ops_h($t[1]) ?></span><span class="t-val"><?= is_int($t[2]) ? number_format($t[2]) : $t[2] ?></span></a>
+  <?php endforeach; ?>
+</div>
 
-$products = $pdo->prepare('SELECT * FROM products WHERE seller_id = ? ORDER BY created_at DESC');
-$products->execute([$seller_id]);
-$products = $products->fetchAll();
-?><!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Seller Dashboard — IANOVA</title><style>
-*{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;background:#FAFAFB;margin:0;color:#0F0F12}
-.top{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;background:#fff;border-bottom:1px solid #E9EBEF}
-.top h1{margin:0;font-size:20px}
-.wrap{max-width:1000px;margin:24px auto;padding:0 16px}
-.btn{display:inline-block;border:0;border-radius:16px;padding:10px 14px;background:#0F0F12;color:#fff;cursor:pointer;font-weight:700;text-decoration:none}
-.btn.amber{background:#0F0F12;color:#0F0F12}
-.table-wrap{overflow:auto;background:#fff;border:1px solid #E9EBEF;border-radius:14px}
-table{width:100%;border-collapse:collapse;min-width:600px}
-th,td{padding:12px 14px;border-bottom:1px solid #e8eeea;text-align:left}
-th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;background:#f7f9f8}
-.muted{color:#6b7973}
-</style></head><body>
-<div class="top">
-<div><h1><?= h($seller['business_name']) ?></h1><div class="muted">Seller dashboard</div></div>
-<div><a class="btn" href="orders.php">Orders</a> <a class="btn amber" href="product_edit.php">+ Add product</a> <a class="btn" href="logout.php">Sign out</a></div>
+<div class="blk">
+  <div class="blk-head"><h2>Automatic order approval: <span style="color:<?= $autoOn ? '#0B6B37' : '#B00F2F' ?>"><?= $autoOn ? 'ON' : 'OFF' ?></span></h2>
+    <form method="post" action="auto_approval.php" style="margin:0"><input type="hidden" name="csrf" value="<?= ops_h($_SESSION['ops_csrf']) ?>"><input type="hidden" name="on" value="<?= $autoMine ? '0' : '1' ?>"><button class="btn <?= $autoMine ? 'red' : 'ok' ?>" type="submit"><?= $autoMine ? 'Switch to manual' : 'Switch on automatic' ?></button></form></div>
+  <p class="muted" style="margin:0"><?php if (!$autoMaster): ?>IANOVA has switched automatic approval off for everyone, so you approve orders by hand in Orders.<?php elseif ($autoMine): ?>When your products are in stock, new orders are approved for you.<?php else: ?>You approve every new order by hand in Orders.<?php endif; ?></p>
 </div>
-<div class="wrap">
-<?php if (!empty($_SESSION['ops_flash'])): ?><div style="padding:12px 14px;border-radius:12px;background:#EEF4FF;margin-bottom:14px"><?= ops_h($_SESSION['ops_flash']) ?></div><?php unset($_SESSION['ops_flash']); endif; ?>
-<?php if (in_array($seller['status'] ?? '', ['suspended', 'rejected'], true)): ?><div style="padding:14px;border-radius:12px;background:#FFEDEE;margin-bottom:14px"><b>Your seller account is restricted by the admin.</b> You cannot add or edit products or approve orders until the admin approves it again.<form method="post" action="request_review.php" style="margin-top:10px"><input type="hidden" name="csrf" value="<?= ops_h($_SESSION['ops_csrf']) ?>"><input type="hidden" name="product_id" value="0"><input name="note" maxlength="800" placeholder="What did you correct?" style="width:100%;padding:8px;border:1px solid #E9EBEF;border-radius:10px;margin-bottom:6px"><button class="btn" type="submit">Request review</button></form></div><?php endif; ?>
-<?php if (!$products): ?>
-<p class="muted">You haven't added any products yet.</p>
-<?php else: ?>
-<div class="table-wrap">
-<table>
-<tr><th>Product</th><th>Price</th><th>Stock</th><th>Status</th><th>Flash deal</th><th>Actions</th></tr>
-<?php foreach ($products as $p): ?>
-<tr>
-<td><b><?= h($p['name']) ?></b></td>
-<td><?= CURRENCY . number_format($p['price'], 2) ?></td>
-<td><?= intval($p['stock']) ?></td>
-<td><?php $st=$p['status']??'approved'; $color=$st==='approved'?'green':($st==='pending'?'orange':'red'); ?><span style="color:<?=$color?>;font-weight:700;text-transform:capitalize;"><?= h($st) ?></span></td>
-<td><?= !empty($p['is_flash_deal']) ? 'Yes' : 'No' ?></td>
-<td><?php if (ops_product_locked($p)): ?><div style="color:#b3261e;font-weight:700;font-size:13px">Locked by admin</div><form method="post" action="request_review.php" style="margin-top:6px"><input type="hidden" name="csrf" value="<?= ops_h($_SESSION['ops_csrf']) ?>"><input type="hidden" name="product_id" value="<?= intval($p['id']) ?>"><input name="note" maxlength="800" placeholder="What did you correct?" style="width:100%;padding:8px;border:1px solid #E9EBEF;border-radius:10px;margin-bottom:6px"><button class="btn" type="submit">Request review</button></form><?php else: ?><a class="btn" href="product_edit.php?id=<?= intval($p['id']) ?>">Edit</a><?php endif; ?></td>
-</tr>
-<?php endforeach; ?>
-</table>
+
+<div class="blk">
+  <div class="blk-head"><h2>Recent orders</h2><a class="btn" href="orders.php">All orders</a></div>
+  <?php if (!$recent): ?><p class="muted">No orders for your products yet.</p><?php endif; ?>
+  <div class="olist">
+  <?php foreach ($recent as $o): ?>
+    <a class="orow" href="orders.php#o<?= (int) $o['id'] ?>">
+      <span class="o-thumbs"><?php foreach (array_slice($thumbs[$o['id']] ?? [], 0, 3) as $t) echo sel_photo($t['image'], '', 'ph mini', $t['emoji'] ?: '🛍️'); ?></span>
+      <span class="o-main"><b>#<?= (int) $o['id'] ?> · <?= ops_h($o['customer']) ?></b><small><?= ops_h($o['created_at']) ?></small></span>
+      <span class="o-side"><b><?= CURRENCY . number_format((float) $o['mine'], 2) ?></b><?= isset($approved[(int) $o['id']]) ? '<span class="spill ok">Approved</span>' : sel_pill($o['status'] === 'cancelled' ? 'cancelled' : 'pending') ?></span>
+    </a>
+  <?php endforeach; ?>
+  </div>
 </div>
-<?php endif; ?>
-</div>
-</body></html>
+<?php seller_foot();

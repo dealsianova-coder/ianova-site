@@ -40,6 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $items) {
 
             $pdo->commit();
             $success_order_id = $order_id;
+            @include_once __DIR__ . "/includes/seller_ops.php"; if (function_exists("ops_ensure")) ops_ensure($pdo);
+            @include_once __DIR__ . "/includes/seller_ops.php"; if (function_exists("ops_ensure")) ops_ensure($pdo);
             unset($_SESSION['cart']); // empty the cart after a successful order
         } catch (Exception $e) {
             $pdo->rollBack();
