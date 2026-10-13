@@ -15,13 +15,6 @@ function ops_ensure(PDO $pdo): void {
     $done = true;
     try {
         ensure_seller_messaging($pdo);
-        $firstRun = !$pdo->query("SHOW TABLES LIKE 'order_notified'")->fetchColumn();
-        $pdo->exec("CREATE TABLE IF NOT EXISTS order_notified (
-            order_id INT NOT NULL PRIMARY KEY,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        // Orders that already exist are left as they are; only new orders are handled automatically.
-        if ($firstRun) $pdo->exec('INSERT IGNORE INTO order_notified (order_id) SELECT id FROM orders');
         $pdo->exec("CREATE TABLE IF NOT EXISTS admin_notifications (
             id INT AUTO_INCREMENT PRIMARY KEY,
             kind VARCHAR(30) NOT NULL,
@@ -42,99 +35,6 @@ function ops_ensure(PDO $pdo): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } catch (Throwable $e) {
     }
-    ops_auto_process($pdo);
-}
-
-/**
- * New orders: tell the main admin, and approve each seller's part automatically when the seller
- * is approved and every one of their products is approved and in stock. Otherwise it stays
- * waiting for the seller to approve by hand. Runs once per order (order_notified is the gate).
- * Called right after checkout and also whenever the admin or seller pages load, so it never gets missed.
- */
-function ops_auto_process(PDO $pdo): void {
-    static $running = false;
-    if ($running) return;
-    $running = true;
-    try {
-        $orders = $pdo->query(
-            "SELECT o.id, o.user_id, COALESCE(o.guest_name, 'Customer') AS customer, o.total
-             FROM orders o
-             WHERE o.status <> 'cancelled'
-               AND NOT EXISTS (SELECT 1 FROM order_notified n WHERE n.order_id = o.id)
-               AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id)
-             ORDER BY o.id LIMIT 50"
-        )->fetchAll();
-        $gate = $pdo->prepare('INSERT IGNORE INTO order_notified (order_id) VALUES (?)');
-        $lq = $pdo->prepare(
-            "SELECT p.seller_id, p.name, p.status, p.stock, oi.quantity,
-                    COALESCE(s.status, '') AS seller_status, COALESCE(s.business_name, 'Seller') AS seller_name
-             FROM order_items oi
-             JOIN products p ON p.id = oi.product_id
-             LEFT JOIN sellers s ON s.id = p.seller_id
-             WHERE oi.order_id = ? AND p.seller_id IS NOT NULL"
-        );
-        $ins = $pdo->prepare('INSERT IGNORE INTO seller_order_approvals (order_id, seller_id) VALUES (?, ?)');
-        $autoOn = ops_setting($pdo, 'auto_approve', '1') === '1';
-        foreach ($orders as $o) {
-            $gate->execute([$o['id']]);
-            if ($gate->rowCount() === 0) continue;
-            $oid = (int) $o['id'];
-            $link = 'order_view.php?id=' . $oid;
-            ops_notify_admin($pdo, 'new_order', 'New order #' . $oid, $o['customer'] . ' - ' . number_format((float) $o['total'], 2), $link, null, null);
-            $lq->execute([$oid]);
-            $bySeller = [];
-            foreach ($lq->fetchAll() as $l) $bySeller[(int) $l['seller_id']][] = $l;
-            // Orders from the app already had their stock reduced at checkout; website guest orders did not.
-            $stockReduced = !empty($o['user_id']);
-            foreach ($bySeller as $sid => $lines) {
-                $name = $lines[0]['seller_name'];
-                $why = $autoOn ? '' : 'automatic approval is switched off';
-                $sellerOff = $autoOn && !ops_seller_auto($pdo, $sid);
-                if ($sellerOff) $why = 'the seller switched automatic approval off';
-                if ($lines[0]['seller_status'] !== 'approved') $why = 'the seller account is restricted';
-                foreach ($lines as $l) {
-                    if ($why !== '') break;
-                    if ($l['status'] !== 'approved') $why = '"' . $l['name'] . '" is not approved';
-                    elseif ($stockReduced ? (int) $l['stock'] < 0 : (int) $l['stock'] < (int) $l['quantity']) $why = '"' . $l['name'] . '" is out of stock';
-                }
-                if ($why === '') {
-                    $ins->execute([$oid, $sid]);
-                    if ($ins->rowCount() > 0) {
-                        ops_notify_admin($pdo, 'auto_approved', 'Order #' . $oid . ' approved automatically for ' . $name,
-                            'All of the seller\'s items are in stock, so no manual approval was needed.', $link, $sid, null);
-                        seller_message_add($pdo, $sid, 'admin', 'New order #' . $oid . ' was approved automatically because your items are in stock. Please prepare it for delivery.');
-                    }
-                } else {
-                    ops_notify_admin($pdo, 'needs_approval', 'Order #' . $oid . ' needs ' . $name . ' to approve', ($autoOn && !$sellerOff ? 'Not approved automatically: ' . $why . '.' : 'Automatic approval is off' . ($sellerOff ? ' for this seller' : '') . ', so the seller has to approve this order by hand.'), $link, $sid, null);
-                }
-            }
-        }
-    } catch (Throwable $e) {
-    }
-    $running = false;
-}
-
-/** On/off switches set by the admin. Automatic order approval is ON unless switched off. */
-function ops_setting(PDO $pdo, string $key, string $default = '1'): string {
-    try {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS ops_settings (k VARCHAR(40) NOT NULL PRIMARY KEY, v VARCHAR(100) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        $q = $pdo->prepare('SELECT v FROM ops_settings WHERE k = ?');
-        $q->execute([$key]);
-        $v = $q->fetchColumn();
-        return $v === false ? $default : (string) $v;
-    } catch (Throwable $e) {
-        return $default;
-    }
-}
-
-function ops_setting_set(PDO $pdo, string $key, string $value): void {
-    ops_setting($pdo, $key);
-    $pdo->prepare('INSERT INTO ops_settings (k, v) VALUES (?, ?) ON DUPLICATE KEY UPDATE v = VALUES(v)')->execute([$key, $value]);
-}
-
-/** A seller's own switch for automatic approval of their orders (default ON). The admin's master switch comes first. */
-function ops_seller_auto(PDO $pdo, int $sellerId): bool {
-    return ops_setting($pdo, 'auto_seller_' . $sellerId, '1') === '1';
 }
 
 function ops_notify_admin(PDO $pdo, string $kind, string $title, string $body, string $link = '', ?int $sellerId = null, ?int $productId = null): void {

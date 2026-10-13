@@ -46,6 +46,14 @@ out(['success' => true, 'store' => [
         'text' => trim((string) store_setting($pdo, 'announcement_text')),
     ],
     'banners' => $banners,
+    'video_ad' => [
+        'enabled' => store_flag($pdo, 'video_ad_enabled', false),
+        'src' => trim((string) store_setting($pdo, 'video_ad_src')),
+        'interval_minutes' => (int) (store_setting($pdo, 'video_ad_interval_minutes') ?: 3),
+        'min_seconds' => (int) (store_setting($pdo, 'video_ad_min_seconds') ?: 30),
+        'link_type' => trim((string) store_setting($pdo, 'video_ad_link_type')) ?: 'none',
+        'link_value' => trim((string) store_setting($pdo, 'video_ad_link_value')),
+    ],
     'delivery' => ['fee' => store_delivery_fee($pdo), 'free_over' => store_free_delivery_threshold($pdo)],
     'support' => [
         'phone' => trim((string) store_setting($pdo, 'support_phone')),

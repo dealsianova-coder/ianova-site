@@ -42,7 +42,6 @@ require 'includes/header.php';
 if (!empty($_SESSION['seller_mail_note'])): ?>
 <div class="notice" style="margin-bottom:14px"><?= admin_h($_SESSION['seller_mail_note']) ?></div>
 <?php unset($_SESSION['seller_mail_note']); endif; ?>
-<div class="actions" style="margin-bottom:14px"><a class="btn" href="../seller/" target="_blank" rel="noopener">🧑‍💼 Open seller site</a><a class="btn gray" href="products.php?status=pending">Products waiting for approval</a></div>
 <div class="table-wrap">
 <table class="table">
 <tr><th>Business</th><th>Email</th><th>Phone</th><th>Products</th><th>Status</th><th>Joined</th><th>Action</th></tr>
