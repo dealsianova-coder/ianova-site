@@ -70,7 +70,22 @@ switch ($action) {
         if ($status !== '') { $sql .= ' WHERE status = ?'; $args[] = $status; }
         $st = $pdo->prepare($sql . ' ORDER BY id DESC LIMIT 100');
         $st->execute($args);
-        out(['success' => true, 'orders' => $st->fetchAll()]);
+        $rows = $st->fetchAll();
+        if ($rows) {
+            $img = image_column($pdo);
+            $ids = array_map('intval', array_column($rows, 'id'));
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            $it = $pdo->prepare("SELECT oi.order_id, oi.quantity, COALESCE(p.name, 'Deleted product') AS name, COALESCE(p.emoji, '') AS emoji, COALESCE(p.bg_color, '#EFF3EC') AS bg_color, COALESCE(p.$img, '') AS image
+                                 FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id WHERE oi.order_id IN ($ph) ORDER BY oi.id");
+            $it->execute($ids);
+            $byOrder = [];
+            foreach ($it->fetchAll() as $r) {
+                $byOrder[(int) $r['order_id']][] = ['name' => $r['name'], 'quantity' => (int) $r['quantity'], 'emoji' => $r['emoji'], 'bg_color' => $r['bg_color'], 'image' => $r['image']];
+            }
+            foreach ($rows as &$row) $row['items'] = array_slice($byOrder[(int) $row['id']] ?? [], 0, 8);
+            unset($row);
+        }
+        out(['success' => true, 'orders' => $rows]);
 
     case 'order_status':
         $id = (int) ($b['id'] ?? 0);
