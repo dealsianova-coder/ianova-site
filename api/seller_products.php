@@ -5,6 +5,7 @@
  * "save" accepts the same fields as the admin/seller web form, plus an `image` file.
  */
 require __DIR__ . '/_seller.php';
+require_once __DIR__ . '/../includes/seller_ops.php';
 $seller = require_approved_seller($pdo);
 $sid = (int) $seller['id'];
 $img = image_column($pdo);
@@ -12,7 +13,7 @@ $hasSub = has_subcategory($pdo);
 $hasOpt = has_option_columns($pdo);
 $autoApprove = !empty($seller['auto_approve']);
 
-$select = "id, name, slug, category_id, price, original_price, stock, status, emoji, bg_color, is_flash_deal, description, COALESCE($img, '') AS image"
+$select = "id, name, slug, category_id, price, original_price, stock, status, emoji, bg_color, is_flash_deal, description, COALESCE($img, '') AS image, (SELECT name FROM categories c WHERE c.id = products.category_id) AS category_name"
     . ($hasSub ? ", COALESCE(subcategory, '') AS subcategory" : ", '' AS subcategory")
     . ($hasOpt ? ", COALESCE(color, '') AS color, COALESCE(size, '') AS size" : ", '' AS color, '' AS size");
 
@@ -21,6 +22,13 @@ function seller_product_row(PDO $pdo, int $id, int $sid, string $select): ?array
     $q->execute([$id, $sid]);
     $r = $q->fetch();
     return $r ?: null;
+}
+
+/** Products the admin hid or rejected cannot be changed by the seller until the admin approves them. */
+function seller_lock_check(array $row): void {
+    if (in_array($row['status'], ['hidden', 'rejected'], true)) {
+        fail('This product is restricted by the admin. Use "Request review".', 403);
+    }
 }
 
 /** Saves an uploaded product photo. Returns the relative path, or null when no file was sent. */
@@ -45,11 +53,18 @@ if (method() === 'POST') {
     $action = (string) ($b['action'] ?? 'save');
     $id = (int) ($b['id'] ?? 0);
 
-    if ($action === 'stock') {
-        if (!seller_product_row($pdo, $id, $sid, $select)) fail('Product not found.', 404);
+    if ($action === 'request_review') {
+        [$ok, $msg] = ops_request_review($pdo, $seller, $id, (string) ($b['note'] ?? ''));
+        if (!$ok) fail($msg, 409);
+    } elseif ($action === 'stock') {
+        $row = seller_product_row($pdo, $id, $sid, $select);
+        if (!$row) fail('Product not found.', 404);
+        seller_lock_check($row);
         $pdo->prepare('UPDATE products SET stock = ? WHERE id = ? AND seller_id = ?')->execute([max(0, (int) ($b['stock'] ?? 0)), $id, $sid]);
     } elseif ($action === 'delete') {
-        if (!seller_product_row($pdo, $id, $sid, $select)) fail('Product not found.', 404);
+        $row = seller_product_row($pdo, $id, $sid, $select);
+        if (!$row) fail('Product not found.', 404);
+        seller_lock_check($row);
         try {
             $pdo->prepare('DELETE FROM products WHERE id = ? AND seller_id = ?')->execute([$id, $sid]);
         } catch (Throwable $e) {
@@ -88,6 +103,7 @@ if (method() === 'POST') {
         if ($id) {
             $old = seller_product_row($pdo, $id, $sid, $select);
             if (!$old) fail('Product not found.', 404);
+            seller_lock_check($old);
             $slug = ($old['name'] === $name && $old['slug'] !== '') ? $old['slug'] : seller_slug($pdo, $name, $id);
             $set = ['category_id=?', 'name=?', 'slug=?', 'description=?', 'price=?', 'original_price=?', 'emoji=?', 'bg_color=?', 'stock=?', 'is_flash_deal=?', 'status=?'];
             $par = [$cat, $name, $slug, $desc, $price, $orig, $emoji, $bg, $stock, $flash, $status];
@@ -122,6 +138,7 @@ $products = array_map(static function ($p) {
     $p['original_price'] = $p['original_price'] === null ? null : (float) $p['original_price'];
     $p['stock'] = (int) $p['stock'];
     $p['is_flash_deal'] = (int) $p['is_flash_deal'];
+    $p['locked'] = in_array($p['status'], ['hidden', 'rejected'], true);
     unset($p['slug']);
     return $p;
 }, $list->fetchAll());

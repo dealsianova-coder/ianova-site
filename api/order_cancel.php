@@ -14,5 +14,6 @@ if ($status !== 'pending') fail('Only pending orders can be cancelled.', 409);
 
 $msg = set_order_status($pdo, $id, 'cancelled');
 if ($msg !== '') fail($msg, 409);
-seller_orders_notify_admin('Order #' . $id . ' cancelled by the customer', '<h2>Order #' . $id . '</h2><p>The customer cancelled this order. Stock has been returned.</p>');
+require_once __DIR__ . '/../includes/seller_ops.php';
+ops_notify_admin($pdo, 'order_cancelled', 'Order #' . $id . ' cancelled by the customer', 'Stock was returned to the shelf.', 'order_view.php?id=' . $id);
 out(['success' => true, 'status' => 'cancelled']);

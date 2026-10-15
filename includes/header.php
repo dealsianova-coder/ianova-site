@@ -2,7 +2,8 @@
 /**
  * IANOVA Store Header
  */
-$categories_nav = $pdo->query("SELECT name, slug, emoji FROM categories WHERE is_hidden = 0 ORDER BY sort_order")->fetchAll();
+require_once __DIR__.'/category_images.php'; cat_img_ensure($pdo);
+$categories_nav = $pdo->query("SELECT name, slug, emoji, image FROM categories WHERE is_hidden = 0 ORDER BY sort_order")->fetchAll();
 
 $site_settings = [];
 try {
@@ -139,7 +140,7 @@ $delivery_banner = str_replace(
         <div class="shop-menu-panel-head">Browse categories</div>
         <?php foreach ($categories_nav as $c): ?>
           <a href="category.php?slug=<?= h($c['slug']) ?>" class="shop-menu-item">
-            <span class="shop-menu-emoji"><?= h($c['emoji'] ?? '🛍️') ?></span>
+            <?= cat_icon_html($c, 'shop-menu-emoji') ?>
             <span><?= h($c['name']) ?></span>
           </a>
         <?php endforeach; ?>

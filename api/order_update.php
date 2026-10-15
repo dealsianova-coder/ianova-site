@@ -68,5 +68,4 @@ try {
     fail('Could not update your order. Please try again.', 500);
 }
 
-if (!$cancelled) seller_order_refresh($pdo, $id);
 out(['success' => true, 'cancelled' => $cancelled, 'total' => $total]);

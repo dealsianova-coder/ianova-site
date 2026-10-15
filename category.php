@@ -3,6 +3,7 @@ require 'config.php';
 require 'includes/functions.php';
 
 $slug = isset($_GET['slug']) ? $_GET['slug'] : '';
+require_once __DIR__.'/includes/category_images.php'; cat_img_ensure($pdo);
 $stmt = $pdo->prepare("SELECT * FROM categories WHERE slug = ?");
 $stmt->execute([$slug]);
 $category = $stmt->fetch();
@@ -36,7 +37,7 @@ require 'includes/header.php';
   <div class="wrap">
     <div class="breadcrumb"><a href="index.php">Home</a> / <?= h($category['name']) ?></div>
     <span class="tag">Category</span>
-    <h1><?= h($category['emoji']) ?> <?= h($category['name']) ?></h1>
+    <h1><?php if(!empty($category['image'])):?><img src="<?= h($category['image']) ?>" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:12px;vertical-align:middle"><?php else:?><?= h($category['emoji']) ?><?php endif;?> <?= h($category['name']) ?></h1>
   </div>
 </div>
 

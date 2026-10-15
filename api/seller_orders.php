@@ -1,38 +1,51 @@
 <?php
-/** Orders that contain this seller's products (read-only; the main admin manages order status). */
+/**
+ * Orders with this seller's products, using the website's approval system
+ * (seller_order_approvals). GET: list. POST {action: approve, order_id} or {action: auto, enabled}.
+ */
 require __DIR__ . '/_seller.php';
-$seller = require_approved_seller($pdo);
+require_once __DIR__ . '/../includes/seller_ops.php';
+$seller = require_seller($pdo);
 $sid = (int) $seller['id'];
+$img = image_column($pdo);
 
-$q = $pdo->prepare(
-    'SELECT o.id, o.guest_name, o.guest_phone, o.address, o.status, o.created_at,
-            oi.quantity, oi.unit_price, p.name AS product_name
-     FROM orders o
-     JOIN order_items oi ON oi.order_id = o.id
-     JOIN products p ON p.id = oi.product_id
-     WHERE p.seller_id = ?
-     ORDER BY o.id DESC, oi.id
-     LIMIT 400'
-);
-$q->execute([$sid]);
-
-$orders = [];
-foreach ($q->fetchAll() as $r) {
-    $oid = (int) $r['id'];
-    if (!isset($orders[$oid])) {
-        $orders[$oid] = [
-            'id' => $oid,
-            'customer' => $r['guest_name'],
-            'phone' => $r['guest_phone'],
-            'address' => $r['address'],
-            'status' => $r['status'],
-            'created_at' => $r['created_at'],
-            'subtotal' => 0.0,
-            'items' => [],
-        ];
+if (method() === 'POST') {
+    $b = body();
+    $action = (string) ($b['action'] ?? '');
+    if ($action === 'approve') {
+        [$ok, $msg] = ops_approve_order($pdo, $seller, (int) ($b['order_id'] ?? 0));
+        if (!$ok) fail($msg, 409);
+    } elseif ($action === 'auto') {
+        ops_setting_set($pdo, 'auto_seller_' . $sid, !empty($b['enabled']) ? '1' : '0');
+    } else {
+        fail('Unknown action.');
     }
-    $line = round((float) $r['unit_price'] * (int) $r['quantity'], 2);
-    $orders[$oid]['subtotal'] += $line;
-    $orders[$oid]['items'][] = ['name' => $r['product_name'], 'quantity' => (int) $r['quantity'], 'unit_price' => (float) $r['unit_price']];
+} elseif (method() !== 'GET') {
+    fail('Method not allowed.', 405);
 }
-out(['success' => true, 'orders' => array_slice(array_values($orders), 0, 100)]);
+
+$orders = ops_seller_orders($pdo, $seller);
+
+// Add product photos to every line.
+if ($orders) {
+    $ids = array_map(static fn($o) => (int) $o['id'], $orders);
+    $ph = implode(',', array_fill(0, count($ids), '?'));
+    $q = $pdo->prepare("SELECT oi.order_id, p.name, COALESCE(p.emoji, '') AS emoji, COALESCE(p.bg_color, '#EFF3EC') AS bg_color, COALESCE(p.$img, '') AS image
+                        FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id IN ($ph) AND p.seller_id = ?");
+    $q->execute(array_merge($ids, [$sid]));
+    $photo = [];
+    foreach ($q->fetchAll() as $r) $photo[(int) $r['order_id'] . '|' . $r['name']] = $r;
+    foreach ($orders as &$o) {
+        foreach ($o['items'] as &$it) {
+            $r = $photo[(int) $o['id'] . '|' . $it['name']] ?? null;
+            $it['image'] = $r['image'] ?? '';
+            $it['emoji'] = $r['emoji'] ?? '';
+            $it['bg_color'] = $r['bg_color'] ?? '#EFF3EC';
+        }
+        unset($it);
+    }
+    unset($o);
+}
+
+$master = ops_setting($pdo, 'auto_approve', '1') === '1';
+out(['success' => true, 'auto_master' => $master, 'auto_mine' => ops_seller_auto($pdo, $sid), 'orders' => $orders]);

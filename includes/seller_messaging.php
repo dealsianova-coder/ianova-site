@@ -29,6 +29,7 @@ function ensure_seller_messaging(PDO $pdo): void {
     if (!$col) {
         $pdo->exec('ALTER TABLE sellers ADD COLUMN auto_approve TINYINT(1) NOT NULL DEFAULT 0');
     }
+    if (function_exists('ensure_seller_orders')) ensure_seller_orders($pdo);
     $done = true;
 }
 

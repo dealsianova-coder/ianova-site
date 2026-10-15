@@ -180,6 +180,18 @@ switch ($action) {
         ops_seller_status_changed($pdo, $sellerId, (string) $old, $new);
         out(['success' => true]);
 
+    case 'broadcast_options':
+        require_once __DIR__ . '/../includes/broadcast.php';
+        bc_ensure($pdo);
+        out(['success' => true, 'sellers' => bc_sellers($pdo), 'history' => bc_history($pdo, 10)]);
+
+    case 'broadcast_send':
+        require_once __DIR__ . '/../includes/broadcast.php';
+        bc_ensure($pdo);
+        $bcRes = bc_send($pdo, (string) ($b['message'] ?? ''), (array) ($b['ids'] ?? []), (string) ($b['status'] ?? ''), !empty($b['mention']), !empty($b['email']));
+        if (isset($bcRes['error'])) fail($bcRes['error']);
+        out(['success' => true, 'count' => $bcRes['count'], 'names' => $bcRes['names'], 'changed' => $bcRes['changed'], 'emailed' => $bcRes['emailed'], 'email_failed' => $bcRes['email_failed']]);
+
     default:
         fail('Unknown action.', 404);
 }

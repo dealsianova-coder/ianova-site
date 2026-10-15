@@ -95,6 +95,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $s = $pdo->prepare("INSERT INTO products(category_id,name,slug,description,price,original_price,emoji,bg_color,stock,is_flash_deal,image,subcategory,color,size,seller_id,seller_name,rating,review_count,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,4.5,0,?)");
                 $s->execute([$cat, $name, $slug, $desc, $price, $orig, $emoji, $bg, $stock, $flash, $image, $sub, $color, $size, $seller_id, $seller['business_name'], $status]);
             }
+            require_once __DIR__ . '/../includes/seller_extras.php';
+            $pid = $id ? (int) $id : (int) $pdo->lastInsertId();
+            $xerr = seller_extras_save($pdo, $pid, $seller, $status);
+            if ($xerr !== '') { $_SESSION['ops_flash'] = $xerr; }
             header('Location: index.php?submitted=1');
             exit;
         } catch (Throwable $e) {
@@ -145,8 +149,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="field"><label>Product image (max 5MB)</label><input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif">
 <?php if (!empty($product['image'])): ?><p><img src="../<?= h($product['image']) ?>" style="width:80px;height:80px;object-fit:cover;border-radius:16px;margin-top:8px;"></p><?php endif; ?>
 </div>
+<div class="field"><label>More photos - front, back, sides (pick several)</label><input type="file" name="gallery[]" multiple accept="image/jpeg,image/png,image/webp,image/gif">
+<?php require_once __DIR__ . '/../includes/gallery.php'; gallery_ensure($pdo); $gx = !empty($product['id']) ? gallery_rows($pdo, (int) $product['id']) : []; if ($gx): ?>
+<p style="font-size:12px;color:#777">Tick a photo to remove it when you save.</p><div style="display:flex;gap:10px;flex-wrap:wrap"><?php foreach ($gx as $g): ?><label style="text-align:center;font-size:12px"><img src="../<?= h($g['image']) ?>" style="width:64px;height:64px;object-fit:cover;border-radius:12px"><br><input type="checkbox" name="del_img[]" value="<?= intval($g['id']) ?>" style="width:auto"> remove</label><?php endforeach; ?></div><?php endif; ?></div>
+<div class="field"><label>More colors of this product (customers swipe between them)</label><div id="opts"></div><button type="button" class="btn" id="addopt">+ Add another color</button><p style="font-size:12px;color:#777">Each color gets its own photo and stock. Leave price empty to use the main price. The Color field above is the first color.</p></div>
 <div class="field"><label><input type="checkbox" name="is_flash_deal" style="width:auto" <?= !empty($product['is_flash_deal']) ? 'checked' : '' ?>> Show as flash deal</label></div>
 <button class="btn amber" type="submit">Save product</button>
 </form>
 </div></div>
+<script>(function(){var box=document.getElementById('opts'),btn=document.getElementById('addopt'),n=0;
+function add(){var k=n++,d=document.createElement('div');d.style.cssText='border:1px solid #E9EBEF;border-radius:14px;padding:12px;margin-bottom:10px';
+d.innerHTML='<input type="hidden" name="opt_k[]" value="'+k+'"><div class="row"><div class="field"><label>Color</label><input name="opt_color[]" list="colors" maxlength="40"></div><div class="field"><label>Stock</label><input type="number" min="0" name="opt_stock[]" value="0"></div></div><div class="row"><div class="field"><label>Price (optional)</label><input type="number" step="0.01" name="opt_price[]"></div><div class="field"><label>Main photo</label><input type="file" name="opt_image[]" accept="image/jpeg,image/png,image/webp,image/gif"></div></div><div class="field"><label>More photos of this color (optional)</label><input type="file" name="opt_more['+k+'][]" multiple accept="image/jpeg,image/png,image/webp,image/gif"></div><button type="button" class="btn">Remove</button>';
+d.querySelector('button').onclick=function(){d.remove();};box.appendChild(d);}
+btn.onclick=add;})();</script>
 </body></html>

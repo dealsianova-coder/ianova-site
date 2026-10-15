@@ -2,6 +2,7 @@
 require 'config.php';
 require 'includes/functions.php';
 
+require_once __DIR__.'/includes/category_images.php'; cat_img_ensure($pdo);
 $categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order")->fetchAll();
 
 // category item counts (for the "N items" caption on each card)
@@ -104,7 +105,7 @@ if ($video_ad_on):
     <div class="cat-grid">
       <?php foreach ($categories as $c): ?>
         <a class="cat-card" href="category.php?slug=<?= h($c['slug']) ?>">
-          <span class="emoji"><?= h($c['emoji']) ?></span>
+          <?= cat_icon_html($c, 'emoji') ?>
           <h4><?= h($c['name']) ?></h4>
           <span class="count"><?= (int) ($counts[$c['id']] ?? 0) ?> items</span>
         </a>
