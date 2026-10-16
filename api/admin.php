@@ -8,12 +8,15 @@ $b = body();
 $action = (string) ($_GET['action'] ?? $b['action'] ?? '');
 
 if ($action === 'login') {
-    $email = strtolower(trim((string) ($b['email'] ?? '')));
+    require_once __DIR__ . '/../includes/auth_security.php';
+    $email = auth_norm((string) ($b['email'] ?? ''));
     $pass = (string) ($b['password'] ?? '');
+    if ($w = auth_locked($pdo, 'admin', $email)) fail(auth_lock_message($w), 429);
     $s = $pdo->prepare('SELECT id, name, email, password_hash FROM admins WHERE email = ? LIMIT 1');
     $s->execute([$email]);
     $a = $s->fetch();
-    if (!$a || !password_verify($pass, $a['password_hash'])) fail('Incorrect admin email or password.', 401);
+    if (!$a || !password_verify($pass, $a['password_hash'])) { auth_record($pdo, 'admin', $email); fail('Incorrect admin email or password.', 401); }
+    auth_clear($pdo, 'admin', $email);
     $token = bin2hex(random_bytes(32));
     $pdo->prepare('INSERT INTO admin_tokens (admin_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))')
         ->execute([(int) $a['id'], hash('sha256', $token)]);

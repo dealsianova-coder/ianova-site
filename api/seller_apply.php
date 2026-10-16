@@ -13,7 +13,8 @@ $pass = (string) ($b['password'] ?? '');
 if ($business === '' || $email === '' || $pass === '') fail('Please fill in all required fields.');
 if (mb_strlen($business) > 150) fail('Business name is too long.');
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) fail('Please enter a valid email address.');
-if (strlen($pass) < 6) fail('Password must be at least 6 characters.');
+require_once __DIR__ . '/../includes/auth_security.php';
+if ($pe = auth_password_error($pass)) fail($pe);
 if (mb_strlen($about) > 2000) fail('Description is too long (2000 characters max).');
 
 $s = $pdo->prepare('SELECT id FROM sellers WHERE email = ?');
