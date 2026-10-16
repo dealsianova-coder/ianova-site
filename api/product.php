@@ -2,7 +2,7 @@
 require __DIR__ . '/_bootstrap.php';
 $id = (int) ($_GET['id'] ?? 0);
 if ($id < 1) fail('Invalid product ID.');
-$s = $pdo->prepare('SELECT ' . product_cols($pdo) . ' FROM products p WHERE p.id = ? AND p.status = "approved"');
+$s = $pdo->prepare('SELECT ' . product_cols($pdo) . ' FROM products p WHERE p.id = ? AND p.status = "approved" AND ' . display_sql('p'));
 $s->execute([$id]);
 $p = $s->fetch();
 if (!$p) fail('Product not found.', 404);
@@ -15,7 +15,7 @@ $sid = $pdo->prepare('SELECT COALESCE(seller_id, 0) FROM products WHERE id = ?')
 $sid->execute([$id]);
 $sellerId = (int) $sid->fetchColumn();
 $ord = has_option_columns($pdo) ? 'p.color, p.size, p.id' : 'p.id';
-$o = $pdo->prepare('SELECT ' . product_cols($pdo) . ' FROM products p WHERE p.status = "approved" AND p.category_id = ? AND COALESCE(p.seller_id, 0) = ? AND LOWER(TRIM(p.name)) = LOWER(TRIM(?)) ORDER BY ' . $ord);
+$o = $pdo->prepare('SELECT ' . product_cols($pdo) . ' FROM products p WHERE p.status = "approved" AND p.category_id = ? AND COALESCE(p.seller_id, 0) = ? AND LOWER(TRIM(p.name)) = LOWER(TRIM(?)) AND ' . display_sql('p') . ' ORDER BY ' . $ord);
 $o->execute([(int) $p['category_id'], $sellerId, $p['name']]);
 $options = $o->fetchAll();
 

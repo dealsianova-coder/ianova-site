@@ -4,7 +4,7 @@ require 'includes/functions.php';
 
 $slug = isset($_GET['slug']) ? $_GET['slug'] : '';
 require_once __DIR__.'/includes/category_images.php'; cat_img_ensure($pdo);
-$stmt = $pdo->prepare("SELECT * FROM categories WHERE slug = ?");
+$stmt = $pdo->prepare("SELECT * FROM categories WHERE slug = ? AND " . display_sql());
 $stmt->execute([$slug]);
 $category = $stmt->fetch();
 

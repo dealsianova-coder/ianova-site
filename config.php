@@ -41,6 +41,9 @@ try {
     die('Database connection failed. Check config.php and make sure schema.sql has been imported. (' . htmlspecialchars($e->getMessage()) . ')');
 }
 
+require_once __DIR__ . '/includes/display.php';
+display_ensure($pdo);
+
 /** Small helper so views never print raw strings without escaping. */
 function h($str) {
     return htmlspecialchars((string) $str, ENT_QUOTES, 'UTF-8');

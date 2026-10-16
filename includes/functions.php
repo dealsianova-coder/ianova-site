@@ -128,7 +128,7 @@ function wishlist_ids() {
 /** SQL that keeps one listing per product name (colors and sizes of one product are grouped). */
 function dedupe_sql(string $alias = ''): string {
     $a = $alias !== '' ? $alias . '.' : '';
-    return "{$a}id IN (SELECT COALESCE(MIN(CASE WHEN g.stock > 0 THEN g.id END), MIN(g.id)) FROM products g WHERE g.status = 'approved' GROUP BY g.category_id, COALESCE(g.seller_id, 0), LOWER(TRIM(g.name)))";
+    return "{$a}id IN (SELECT COALESCE(MIN(CASE WHEN g.stock > 0 THEN g.id END), MIN(g.id)) FROM products g WHERE g.status = 'approved' AND " . display_sql('g') . " GROUP BY g.category_id, COALESCE(g.seller_id, 0), LOWER(TRIM(g.name)))";
 }
 
 /** Best sibling to open for a color / size chip: same other choice and in stock when possible. */

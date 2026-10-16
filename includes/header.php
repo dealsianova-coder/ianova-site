@@ -3,7 +3,7 @@
  * IANOVA Store Header
  */
 require_once __DIR__.'/category_images.php'; cat_img_ensure($pdo);
-$categories_nav = $pdo->query("SELECT name, slug, emoji, image FROM categories WHERE is_hidden = 0 ORDER BY sort_order")->fetchAll();
+$categories_nav = $pdo->query("SELECT name, slug, emoji, image FROM categories WHERE is_hidden = 0 AND " . display_sql() . " ORDER BY sort_order")->fetchAll();
 
 $site_settings = [];
 try {
@@ -42,7 +42,7 @@ $delivery_banner = str_replace(
 
 <body>
 
-<?php if (($site_settings['announcement_enabled'] ?? '0') === '1' && trim($site_settings['announcement_text'] ?? '') !== ''): ?><div class="announce"><?= h($site_settings['announcement_text']) ?></div><?php endif; ?>
+<?php if (($site_settings['announcement_enabled'] ?? '0') === '1' && display_setting_allows($site_settings['disp_announcement'] ?? 'both') && trim($site_settings['announcement_text'] ?? '') !== ''): ?><div class="announce"><?= h($site_settings['announcement_text']) ?></div><?php endif; ?>
 <div class="promo-ticker">
   <div class="track">
     <span><?= h($delivery_banner) ?></span>

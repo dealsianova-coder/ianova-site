@@ -3,10 +3,10 @@ require 'config.php';
 require 'includes/functions.php';
 
 require_once __DIR__.'/includes/category_images.php'; cat_img_ensure($pdo);
-$categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order")->fetchAll();
+$categories = $pdo->query("SELECT * FROM categories WHERE " . display_sql() . " ORDER BY sort_order")->fetchAll();
 
 // category item counts (for the "N items" caption on each card)
-$counts_stmt = $pdo->query("SELECT category_id, COUNT(*) AS n FROM products GROUP BY category_id");
+$counts_stmt = $pdo->query("SELECT category_id, COUNT(*) AS n FROM products WHERE " . display_sql() . " GROUP BY category_id");
 $counts = [];
 foreach ($counts_stmt as $row) $counts[$row['category_id']] = $row['n'];
 
@@ -20,9 +20,9 @@ require 'includes/header.php';
 
 <?php
 $banners = [];
-try { $banners = $pdo->query("SELECT * FROM banners WHERE is_active = 1 ORDER BY sort_order, id")->fetchAll(); } catch (Throwable $e) { $banners = []; }
+try { $banners = $pdo->query("SELECT * FROM banners WHERE is_active = 1 AND " . display_sql() . " ORDER BY sort_order, id")->fetchAll(); } catch (Throwable $e) { $banners = []; }
 
-$video_ad_on = (($site_settings['video_ad_enabled'] ?? '0') === '1') && !empty($site_settings['video_ad_src']);
+$video_ad_on = (($site_settings['video_ad_enabled'] ?? '0') === '1') && !empty($site_settings['video_ad_src']) && display_setting_allows($site_settings['disp_video_ad'] ?? 'both');
 if ($video_ad_on):
     $video_ad_href = '';
     $vLinkType = $site_settings['video_ad_link_type'] ?? 'none';
@@ -114,7 +114,7 @@ if ($video_ad_on):
   </div>
 </section>
 
-<?php $flash_on = (($site_settings['show_flash'] ?? '1') !== '0'); if (!empty($site_settings['flash_ends_at']) && strtotime($site_settings['flash_ends_at']) && strtotime($site_settings['flash_ends_at']) < time()) $flash_on = false; if ($flash_on): ?>
+<?php $flash_on = (($site_settings['show_flash'] ?? '1') !== '0') && display_setting_allows($site_settings['disp_flash'] ?? 'both'); if (!empty($site_settings['flash_ends_at']) && strtotime($site_settings['flash_ends_at']) && strtotime($site_settings['flash_ends_at']) < time()) $flash_on = false; if ($flash_on): ?>
 <section class="flash" id="deals">
   <div class="scallop to-white" style="transform:rotate(180deg);"></div>
   <div class="flash-bar">

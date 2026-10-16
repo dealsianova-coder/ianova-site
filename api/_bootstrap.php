@@ -54,7 +54,7 @@ function has_option_columns(PDO $pdo): bool {
 
 /** Keeps one listing per product name: colors and sizes of the same product are grouped. */
 function representative_filter(string $alias = 'p'): string {
-    return "$alias.id IN (SELECT COALESCE(MIN(CASE WHEN g.stock > 0 THEN g.id END), MIN(g.id)) FROM products g WHERE g.status = 'approved' GROUP BY g.category_id, COALESCE(g.seller_id, 0), LOWER(TRIM(g.name)))";
+    return "$alias.id IN (SELECT COALESCE(MIN(CASE WHEN g.stock > 0 THEN g.id END), MIN(g.id)) FROM products g WHERE g.status = 'approved' AND " . display_sql('g') . " GROUP BY g.category_id, COALESCE(g.seller_id, 0), LOWER(TRIM(g.name)))";
 }
 
 /** SQL column list for a product row, always exposing the image as `image`. */

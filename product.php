@@ -3,7 +3,7 @@ require 'config.php';
 require 'includes/functions.php';
 
 $slug = isset($_GET['slug']) ? $_GET['slug'] : '';
-$stmt = $pdo->prepare("SELECT p.*, c.name AS category_name, c.slug AS category_slug FROM products p JOIN categories c ON c.id = p.category_id WHERE p.slug = ?");
+$stmt = $pdo->prepare("SELECT p.*, c.name AS category_name, c.slug AS category_slug FROM products p JOIN categories c ON c.id = p.category_id WHERE p.slug = ? AND " . display_sql('p'));
 $stmt->execute([$slug]);
 $product = $stmt->fetch();
 
@@ -110,7 +110,7 @@ require 'includes/header.php';
       <?php
       $options = [];
       try {
-          $oq = $pdo->prepare("SELECT * FROM products WHERE status='approved' AND category_id = ? AND COALESCE(seller_id,0) = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?)) ORDER BY color, size, id");
+          $oq = $pdo->prepare("SELECT * FROM products WHERE status='approved' AND category_id = ? AND COALESCE(seller_id,0) = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?)) AND " . display_sql() . " ORDER BY color, size, id");
           $oq->execute([$product['category_id'], (int) ($product['seller_id'] ?? 0), $product['name']]);
           $options = $oq->fetchAll();
       } catch (Throwable $e) { $options = []; }

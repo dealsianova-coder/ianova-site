@@ -52,12 +52,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $active = isset($_POST['is_active']) ? 1 : 0;
             $image = banner_upload();
             if ($id) {
-                $pdo->prepare('UPDATE banners SET title=?, subtitle=?, button_label=?, link_type=?, link_value=?, color=?, sort_order=?, is_active=? WHERE id=?')
-                    ->execute([$title, $sub, $label, $type, $value, $color, $order, $active, $id]);
+                $pdo->prepare('UPDATE banners SET title=?, subtitle=?, button_label=?, link_type=?, link_value=?, color=?, sort_order=?, is_active=?, show_on=? WHERE id=?')
+                    ->execute([$title, $sub, $label, $type, $value, $color, $order, $active, display_clean($_POST['show_on'] ?? 'both'), $id]);
                 if ($image) $pdo->prepare('UPDATE banners SET image=? WHERE id=?')->execute([$image, $id]);
             } else {
-                $pdo->prepare('INSERT INTO banners (title, subtitle, button_label, image, link_type, link_value, color, sort_order, is_active) VALUES (?,?,?,?,?,?,?,?,?)')
-                    ->execute([$title, $sub, $label, $image ?: '', $type, $value, $color, $order, $active]);
+                $pdo->prepare('INSERT INTO banners (title, subtitle, button_label, image, link_type, link_value, color, sort_order, is_active, show_on) VALUES (?,?,?,?,?,?,?,?,?,?)')
+                    ->execute([$title, $sub, $label, $image ?: '', $type, $value, $color, $order, $active, display_clean($_POST['show_on'] ?? 'both')]);
             }
         }
     }
@@ -109,6 +109,7 @@ require 'includes/header.php';
   <div class="field"><label>Search words (if "A search")</label><input name="link_search" maxlength="200" value="<?= $v('link_type') === 'search' ? admin_h($v('link_value')) : '' ?>"></div>
   <div class="field"><label>Order (smallest first)</label><input type="number" name="sort_order" value="<?= (int) $v('sort_order', 0) ?>"></div>
 </div>
+<div class="field"><label>Show this banner on</label><select name="show_on"><?php foreach (display_values() as $k => $name): ?><option value="<?= $k ?>" <?= display_clean($v('show_on', 'both')) === $k ? 'selected' : '' ?>><?= $name ?></option><?php endforeach; ?></select></div>
 <div class="field"><label><input type="checkbox" name="is_active" value="1" <?= ($edit ? !empty($edit['is_active']) : true) ? 'checked' : '' ?>> Show this banner</label></div>
 <button class="btn"><?= $edit ? 'Save banner' : 'Add banner' ?></button>
 <?php if ($edit): ?><a class="btn gray" href="banners.php" style="margin-left:8px">Cancel</a><?php endif; ?>
@@ -117,12 +118,13 @@ require 'includes/header.php';
 
 <div class="table-wrap">
 <table class="table">
-<tr><th>Order</th><th>Banner</th><th>Opens</th><th>Status</th><th></th></tr>
+<tr><th>Order</th><th>Banner</th><th>Opens</th><th>Shows on</th><th>Status</th><th></th></tr>
 <?php foreach ($banners as $b): ?>
 <tr>
   <td><?= (int) $b['sort_order'] ?></td>
   <td><b><?= admin_h($b['title']) ?></b><br><span class="muted"><?= admin_h($b['subtitle']) ?></span></td>
   <td><?= admin_h($b['link_type']) ?></td>
+  <td><?= admin_h(display_label($b['show_on'] ?? 'both')) ?></td>
   <td><?= $b['is_active'] ? 'Showing' : 'Hidden' ?></td>
   <td style="white-space:nowrap">
     <a class="btn gray" href="banners.php?edit=<?= (int) $b['id'] ?>">Edit</a>

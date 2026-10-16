@@ -7,7 +7,7 @@ function store_flag(PDO $pdo, string $key, bool $default = true): bool {
     return $v === null ? $default : trim($v) !== '0';
 }
 
-$active = store_flag($pdo, 'show_flash');
+$active = store_flag($pdo, 'show_flash') && display_setting_allows(store_setting($pdo, 'disp_flash'));
 $ends = null;
 $raw = trim((string) store_setting($pdo, 'flash_ends_at'));
 if ($raw !== '') {
@@ -22,7 +22,7 @@ $title = trim((string) store_setting($pdo, 'flash_deals_title'));
 $banners = [];
 try {
     $img = image_column($pdo);
-    foreach ($pdo->query('SELECT * FROM banners WHERE is_active = 1 ORDER BY sort_order, id')->fetchAll() as $bn) {
+    foreach ($pdo->query('SELECT * FROM banners WHERE is_active = 1 AND ' . display_sql() . ' ORDER BY sort_order, id')->fetchAll() as $bn) {
         $image = (string) $bn['image'];
         if ($image === '' && $bn['link_type'] === 'product') {
             $q = $pdo->prepare("SELECT COALESCE($img, '') FROM products WHERE id = ?");
@@ -42,12 +42,12 @@ out(['success' => true, 'store' => [
         'popular' => store_flag($pdo, 'show_popular'),
     ],
     'announcement' => [
-        'enabled' => store_flag($pdo, 'announcement_enabled', false),
+        'enabled' => store_flag($pdo, 'announcement_enabled', false) && display_setting_allows(store_setting($pdo, 'disp_announcement')),
         'text' => trim((string) store_setting($pdo, 'announcement_text')),
     ],
     'banners' => $banners,
     'video_ad' => [
-        'enabled' => store_flag($pdo, 'video_ad_enabled', false),
+        'enabled' => store_flag($pdo, 'video_ad_enabled', false) && display_setting_allows(store_setting($pdo, 'disp_video_ad')),
         'src' => trim((string) store_setting($pdo, 'video_ad_src')),
         'interval_minutes' => (int) (store_setting($pdo, 'video_ad_interval_minutes') ?: 3),
         'min_seconds' => (int) (store_setting($pdo, 'video_ad_min_seconds') ?: 30),
