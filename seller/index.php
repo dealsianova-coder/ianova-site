@@ -70,7 +70,7 @@ seller_head('Dashboard', 'index.php');
   <?php if (!$recent): ?><p class="muted">No orders for your products yet.</p><?php endif; ?>
   <div class="olist">
   <?php foreach ($recent as $o): ?>
-    <a class="orow" href="orders.php#o<?= (int) $o['id'] ?>">
+    <a class="orow" href="order_view.php?id=<?= (int) $o['id'] ?>">
       <span class="o-thumbs"><?php foreach (array_slice($thumbs[$o['id']] ?? [], 0, 3) as $t) echo sel_photo($t['image'], '', 'ph mini', $t['emoji'] ?: '🛍️'); ?></span>
       <span class="o-main"><b>#<?= (int) $o['id'] ?> · <?= ops_h($o['customer']) ?></b><small><?= ops_h($o['created_at']) ?></small></span>
       <span class="o-side"><b><?= CURRENCY . number_format((float) $o['mine'], 2) ?></b><?= isset($approved[(int) $o['id']]) ? '<span class="spill ok">Approved</span>' : sel_pill($o['status'] === 'cancelled' ? 'cancelled' : 'pending') ?></span>

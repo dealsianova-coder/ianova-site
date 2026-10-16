@@ -53,7 +53,7 @@ seller_head('Orders', 'orders.php');
     foreach ($o['items'] as $it) { $sum += $it['quantity'] * $it['unit_price']; if (ops_product_locked($it)) $locked = true; }
 ?>
   <div class="ocard<?= $o['waiting'] ? ' is-new' : '' ?>" id="o<?= (int) $o['id'] ?>">
-    <div class="oc-head"><b>Order #<?= (int) $o['id'] ?></b><?= $o['done'] ? '<span class="spill ok">Approved</span>' : ($o['status'] === 'cancelled' ? '<span class="spill bad">Cancelled</span>' : '<span class="spill warn">Waiting for you</span>') ?></div>
+    <div class="oc-head"><a href="order_view.php?id=<?= (int) $o['id'] ?>" style="text-decoration:underline"><b>Order #<?= (int) $o['id'] ?></b></a><?= $o['done'] ? '<span class="spill ok">Approved</span>' : ($o['status'] === 'cancelled' ? '<span class="spill bad">Cancelled</span>' : '<span class="spill warn">Waiting for you</span>') ?></div>
     <div class="oc-info">
       <b><?= ops_h($o['customer']) ?></b>
       <span class="muted"><?= ops_h($o['guest_phone'] ?? '') ?><?= !empty($o['address']) ? ' · ' . ops_h($o['address']) : '' ?></span>
