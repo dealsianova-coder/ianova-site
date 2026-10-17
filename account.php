@@ -13,6 +13,23 @@ $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
 $stmt->execute([$user_id]);
 $user = $stmt->fetch();
 
+require_once __DIR__ . '/includes/auth_security.php';
+$pw_msg = ''; $pw_ok = false;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'password') {
+    $wait = auth_locked($pdo, 'user', $user['email']);
+    if (!auth_csrf_ok()) $pw_msg = 'Your page expired. Please try again.';
+    elseif ($wait) $pw_msg = auth_lock_message($wait);
+    elseif (!password_verify((string) ($_POST['current'] ?? ''), (string) $user['password_hash'])) { auth_record($pdo, 'user', $user['email']); $pw_msg = 'Your current password is not correct.'; }
+    elseif (($pe = auth_password_error((string) ($_POST['password'] ?? ''))) !== null) $pw_msg = $pe;
+    elseif (($_POST['password'] ?? '') !== ($_POST['password2'] ?? '')) $pw_msg = 'The two new passwords do not match.';
+    else {
+        $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([password_hash((string) $_POST['password'], PASSWORD_DEFAULT), $user_id]);
+        try { $pdo->prepare('DELETE FROM api_tokens WHERE user_id = ?')->execute([$user_id]); } catch (Throwable $e) {}
+        session_regenerate_id(true); auth_clear($pdo, 'user', $user['email']);
+        $pw_ok = true; $pw_msg = 'Password changed.';
+    }
+}
+
 $orders = $pdo->prepare('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC');
 $orders->execute([$user_id]);
 $orders = $orders->fetchAll();
@@ -33,6 +50,22 @@ require 'includes/header.php';
 <section class="wrap" style="max-width:760px;margin:40px auto;">
   <h1 style="margin-top:0;">Hello, <?= h($user['name']) ?></h1>
   <p style="color:var(--muted);margin-top:-8px;"><?= h($user['email']) ?></p>
+
+  <details style="margin-top:22px;border:1px solid var(--line);border-radius:18px;background:#fff;padding:14px 18px;"<?= $pw_msg ? ' open' : '' ?>>
+    <summary style="cursor:pointer;font-weight:800;">Change password</summary>
+    <?php if ($pw_msg): ?><div style="margin:12px 0;padding:11px 14px;border-radius:14px;background:<?= $pw_ok ? '#EAF8F0' : '#FFF1F4' ?>;color:<?= $pw_ok ? '#136B3A' : '#B0102F' ?>;"><?= h($pw_msg) ?></div><?php endif; ?>
+    <form method="post" style="margin-top:12px;max-width:380px;">
+      <?= auth_csrf_field() ?><input type="hidden" name="action" value="password">
+      <label style="display:block;font-size:13px;font-weight:700;margin:0 0 6px;">Current password</label>
+      <input type="password" name="current" required autocomplete="current-password" style="width:100%;padding:11px;margin-bottom:12px;border:1px solid #ccd7d1;border-radius:12px;font:inherit;">
+      <label style="display:block;font-size:13px;font-weight:700;margin:0 0 6px;">New password</label>
+      <input type="password" name="password" required minlength="8" autocomplete="new-password" style="width:100%;padding:11px;margin-bottom:4px;border:1px solid #ccd7d1;border-radius:12px;font:inherit;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">At least 8 characters, with a letter and a number.</div>
+      <label style="display:block;font-size:13px;font-weight:700;margin:0 0 6px;">Confirm new password</label>
+      <input type="password" name="password2" required autocomplete="new-password" style="width:100%;padding:11px;margin-bottom:14px;border:1px solid #ccd7d1;border-radius:12px;font:inherit;">
+      <button type="submit" style="padding:12px 22px;border:0;border-radius:999px;background:#0B1B3F;color:#fff;font-weight:800;cursor:pointer;">Save new password</button>
+    </form>
+  </details>
 
   <h2 style="margin-top:32px;font-size:19px;">My orders</h2>
 
