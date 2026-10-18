@@ -7,6 +7,8 @@ require __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/../includes/admin_orders_ui.php';
 require_once __DIR__ . '/../includes/seller_ops.php';
 require_once __DIR__ . '/../includes/gallery.php';
+require_once __DIR__ . '/../includes/display.php';
+require_once __DIR__ . '/../includes/category_images.php';
 date_default_timezone_set('Africa/Nairobi');
 
 // ---- admin session (same tokens as api/admin.php) -------------------------------------------
@@ -22,6 +24,8 @@ if (!$b) $b = $_POST;
 $action = (string) ($_GET['action'] ?? $b['action'] ?? '');
 ops_ensure($pdo);
 gallery_ensure($pdo);
+display_ensure($pdo);
+cat_img_ensure($pdo);
 
 // ---- helpers --------------------------------------------------------------------------------
 function apx_rows(PDO $pdo, string $sql, array $par = []): array { try { $q = $pdo->prepare($sql); $q->execute($par); return $q->fetchAll(PDO::FETCH_ASSOC); } catch (Throwable $e) { return []; } }
@@ -262,7 +266,7 @@ switch ($action) {
             'original_price' => $p['original_price'] === null ? null : (float) $p['original_price'], 'stock' => (int) $p['stock'], 'status' => (string) ($p['status'] ?? 'approved'),
             'category_id' => (int) $p['category_id'], 'category' => (string) ($p['category'] ?? ''), 'subcategory' => (string) ($p['subcategory'] ?? ''), 'seller' => $p['seller'],
             'seller_name' => (string) ($p['seller_name'] ?? ''), 'color' => (string) ($p['color'] ?? ''), 'size' => (string) ($p['size'] ?? ''), 'is_flash_deal' => (int) ($p['is_flash_deal'] ?? 0),
-            'rating' => (float) ($p['rating'] ?? 0), 'review_count' => (int) ($p['review_count'] ?? 0), 'emoji' => (string) ($p['emoji'] ?? ''), 'bg_color' => (string) ($p['bg_color'] ?? ''),
+            'show_on' => display_clean($p['show_on'] ?? 'both'), 'rating' => (float) ($p['rating'] ?? 0), 'review_count' => (int) ($p['review_count'] ?? 0), 'emoji' => (string) ($p['emoji'] ?? ''), 'bg_color' => (string) ($p['bg_color'] ?? ''),
             'image' => (string) ($p['image_path'] ?? '')],
             'images' => $imgs, 'gallery' => $gal, 'others' => $others]);
 
@@ -336,6 +340,12 @@ switch ($action) {
         } catch (Throwable $e) {
             fail('Could not save the product: ' . $e->getMessage());
         }
+        try {
+            $g = $pdo->prepare('SELECT category_id, COALESCE(seller_id,0) AS sid, name FROM products WHERE id = ?');
+            $g->execute([$pid]);
+            $gr = $g->fetch(PDO::FETCH_ASSOC);
+            if ($gr) $pdo->prepare('UPDATE products SET show_on = ? WHERE category_id = ? AND COALESCE(seller_id,0) = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?))')->execute([display_clean($b['show_on'] ?? 'both'), $gr['category_id'], $gr['sid'], $gr['name']]);
+        } catch (Throwable $e) {}
         out(['success' => true, 'id' => $pid, 'added_colors' => $added]);
 
     case 'product_action':
@@ -355,7 +365,7 @@ switch ($action) {
 
     // ============================== CATEGORIES ==============================
     case 'categories_list':
-        out(['success' => true, 'categories' => apx_rows($pdo, 'SELECT c.id, c.name, c.slug, c.emoji, c.sort_order, COALESCE(c.is_hidden,0) is_hidden, COUNT(p.id) products FROM categories c LEFT JOIN products p ON p.category_id = c.id GROUP BY c.id ORDER BY c.sort_order, c.name')]);
+        out(['success' => true, 'categories' => apx_rows($pdo, "SELECT c.id, c.name, c.slug, c.emoji, COALESCE(c.image,'') image, c.sort_order, COALESCE(c.is_hidden,0) is_hidden, COALESCE(c.show_on,'both') show_on, COUNT(p.id) products FROM categories c LEFT JOIN products p ON p.category_id = c.id GROUP BY c.id ORDER BY c.sort_order, c.name")]);
 
     case 'category_save':
         $id = (int) ($b['id'] ?? 0);
@@ -363,10 +373,17 @@ switch ($action) {
         $slug = apx_slugify(trim((string) ($b['slug'] ?? '')) !== '' ? (string) $b['slug'] : $name);
         $emoji = trim((string) ($b['emoji'] ?? '')) ?: '🛍️';
         $sort = (int) ($b['sort_order'] ?? 0);
+        $showOn = display_clean($b['show_on'] ?? 'both');
         if ($name === '' || $slug === '') fail('Name is required.');
+        $oldImg = null;
+        if ($id) { $q = $pdo->prepare('SELECT image FROM categories WHERE id = ?'); $q->execute([$id]); $oldImg = $q->fetchColumn() ?: null; }
+        $imgPath = $oldImg;
+        if (!empty($b['remove_image']) && (string) $b['remove_image'] !== '0') { cat_img_delete($oldImg); $imgPath = null; }
+        $up = isset($_FILES['image']) ? cat_img_save($_FILES['image']) : null;
+        if ($up) { if ($oldImg) cat_img_delete($oldImg); $imgPath = $up; }
         try {
-            if ($id) $pdo->prepare('UPDATE categories SET name=?, slug=?, emoji=?, sort_order=? WHERE id=?')->execute([$name, $slug, $emoji, $sort, $id]);
-            else $pdo->prepare('INSERT INTO categories(name, slug, emoji, sort_order) VALUES(?,?,?,?)')->execute([$name, $slug, $emoji, $sort]);
+            if ($id) $pdo->prepare('UPDATE categories SET name=?, slug=?, emoji=?, image=?, sort_order=?, show_on=? WHERE id=?')->execute([$name, $slug, $emoji, $imgPath, $sort, $showOn, $id]);
+            else $pdo->prepare('INSERT INTO categories(name, slug, emoji, image, sort_order, show_on) VALUES(?,?,?,?,?,?)')->execute([$name, $slug, $emoji, $imgPath, $sort, $showOn]);
         } catch (Throwable $e) { fail('Could not save category. The slug must be unique.'); }
         out(['success' => true]);
 
@@ -479,10 +496,10 @@ switch ($action) {
         $active = !empty($b['is_active']) && (string) $b['is_active'] !== '0' ? 1 : 0;
         $image = apx_image_upload('image', 'uploads/banners', 'b');
         if ($id) {
-            $pdo->prepare('UPDATE banners SET title=?, subtitle=?, button_label=?, link_type=?, link_value=?, color=?, sort_order=?, is_active=? WHERE id=?')->execute([$title, $sub, $label, $type, $value, $color, $order, $active, $id]);
+            $pdo->prepare('UPDATE banners SET title=?, subtitle=?, button_label=?, link_type=?, link_value=?, color=?, sort_order=?, is_active=?, show_on=? WHERE id=?')->execute([$title, $sub, $label, $type, $value, $color, $order, $active, display_clean($b['show_on'] ?? 'both'), $id]);
             if ($image) $pdo->prepare('UPDATE banners SET image=? WHERE id=?')->execute([$image, $id]);
         } else {
-            $pdo->prepare('INSERT INTO banners (title, subtitle, button_label, image, link_type, link_value, color, sort_order, is_active) VALUES (?,?,?,?,?,?,?,?,?)')->execute([$title, $sub, $label, $image ?: '', $type, $value, $color, $order, $active]);
+            $pdo->prepare('INSERT INTO banners (title, subtitle, button_label, image, link_type, link_value, color, sort_order, is_active, show_on) VALUES (?,?,?,?,?,?,?,?,?,?)')->execute([$title, $sub, $label, $image ?: '', $type, $value, $color, $order, $active, display_clean($b['show_on'] ?? 'both')]);
         }
         out(['success' => true]);
 
@@ -557,6 +574,197 @@ switch ($action) {
         $out = [];
         foreach ($fields as $f) $out[] = ['key' => $f[0], 'label' => $f[1], 'group' => $f[2], 'value' => $cur[$f[0]] ?? ($defaults[$f[0]] ?? '')];
         out(['success' => true, 'fields' => $out]);
+
+
+    // ============================== DISPLAY CONTROL ==============================
+    case 'display_get':
+        $tab = (string) ($_GET['tab'] ?? 'sections');
+        $cur = [];
+        foreach (apx_rows($pdo, 'SELECT setting_key, setting_value FROM settings') as $r) $cur[$r['setting_key']] = (string) $r['setting_value'];
+        $defs = [
+            ['Flash deals', 'The countdown and deal products on the home page.', 'show_flash', 'disp_flash', '1', true],
+            ['Announcement bar', 'The message across the top (write it in Store control).', 'announcement_enabled', 'disp_announcement', '0', true],
+            ['Video ad', 'The video pop-up (set the video in Video ad).', 'video_ad_enabled', 'disp_video_ad', '0', true],
+            ['Sale shortcut', 'App home screen only.', 'show_sale', '', '1', false],
+            ['Category shortcuts', 'App home screen only.', 'show_categories', '', '1', false],
+            ['Recently viewed', 'App home screen only.', 'show_recent', '', '1', false],
+            ['Popular', 'App home screen only.', 'show_popular', '', '1', false],
+        ];
+        $res = ['success' => true, 'tab' => $tab];
+        if ($tab === 'sections') {
+            $secs = [];
+            foreach ($defs as $d) {
+                $shown = trim($cur[$d[2]] ?? $d[4]) !== '0';
+                if ($d[5]) $val = $shown ? display_clean($cur[$d[3]] ?? 'both') : 'off';
+                else $val = $shown ? 'on' : 'off';
+                $secs[] = ['key' => $d[2], 'label' => $d[0], 'note' => $d[1], 'both' => $d[5], 'value' => $val];
+            }
+            $res['sections'] = $secs;
+        } elseif ($tab === 'banners') {
+            $res['rows'] = apx_rows($pdo, "SELECT id, title, subtitle, is_active, COALESCE(show_on,'both') show_on FROM banners ORDER BY sort_order, id");
+        } elseif ($tab === 'categories') {
+            $res['rows'] = apx_rows($pdo, "SELECT id, name, emoji, COALESCE(image,'') image, is_hidden, COALESCE(show_on,'both') show_on FROM categories ORDER BY sort_order, name");
+        } else {
+            $qtext = trim((string) ($_GET['q'] ?? ''));
+            $v = in_array($_GET['v'] ?? '', ['both', 'web', 'app'], true) ? $_GET['v'] : '';
+            $page = max(1, (int) ($_GET['page'] ?? 1));
+            $per = 40;
+            $where = "p.status = 'approved' AND p.id IN (SELECT MIN(g.id) FROM products g WHERE g.status = 'approved' GROUP BY g.category_id, COALESCE(g.seller_id, 0), LOWER(TRIM(g.name)))";
+            $args = [];
+            if ($qtext !== '') { $where .= ' AND p.name LIKE ?'; $args[] = '%' . $qtext . '%'; }
+            if ($v !== '') { $where .= " AND COALESCE(p.show_on, 'both') = ?"; $args[] = $v; }
+            $total = (int) apx_val($pdo, "SELECT COUNT(*) FROM products p WHERE $where", $args);
+            $pages = max(1, (int) ceil($total / $per));
+            $page = min($page, $pages);
+            $off = ($page - 1) * $per;
+            $res['rows'] = apx_rows($pdo, "SELECT p.id, p.name, p.price, p.seller_name, COALESCE(p.show_on,'both') show_on,
+                (SELECT COUNT(DISTINCT COALESCE(g2.show_on,'both')) FROM products g2 WHERE g2.category_id = p.category_id AND COALESCE(g2.seller_id,0) = COALESCE(p.seller_id,0) AND LOWER(TRIM(g2.name)) = LOWER(TRIM(p.name))) kinds
+                FROM products p WHERE $where ORDER BY p.id DESC LIMIT $per OFFSET $off", $args);
+            $res['total'] = $total; $res['pages'] = $pages; $res['page'] = $page;
+        }
+        out($res);
+
+    case 'display_save':
+        $tab = (string) ($b['tab'] ?? 'sections');
+        $vals = $b['values'] ?? [];
+        if (is_string($vals)) $vals = json_decode($vals, true) ?: [];
+        if ($tab === 'sections') {
+            $secKeys = ['show_flash' => 'disp_flash', 'announcement_enabled' => 'disp_announcement', 'video_ad_enabled' => 'disp_video_ad', 'show_sale' => '', 'show_categories' => '', 'show_recent' => '', 'show_popular' => ''];
+            foreach ($secKeys as $key => $disp) {
+                $v = (string) ($vals[$key] ?? '');
+                if ($v === 'off') apx_put_setting($pdo, $key, '0');
+                elseif ($v === 'on' || in_array($v, ['both', 'web', 'app'], true)) {
+                    apx_put_setting($pdo, $key, '1');
+                    if ($disp !== '' && $v !== 'on') apx_put_setting($pdo, $disp, $v);
+                }
+            }
+        } elseif ($tab === 'banners' || $tab === 'categories') {
+            $table = $tab === 'banners' ? 'banners' : 'categories';
+            $upd = $pdo->prepare("UPDATE `$table` SET show_on = ? WHERE id = ?");
+            foreach ((array) $vals as $id => $v) if (in_array($v, ['both', 'web', 'app'], true)) $upd->execute([$v, (int) $id]);
+        } else {
+            $prev = $b['prev'] ?? [];
+            if (is_string($prev)) $prev = json_decode($prev, true) ?: [];
+            $get = $pdo->prepare('SELECT category_id, COALESCE(seller_id,0) AS sid, name FROM products WHERE id = ?');
+            $upd = $pdo->prepare('UPDATE products SET show_on = ? WHERE category_id = ? AND COALESCE(seller_id,0) = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?))');
+            foreach ((array) $vals as $id => $v) {
+                $id = (int) $id;
+                if (!in_array($v, ['both', 'web', 'app'], true)) continue;
+                if ((string) (((array) $prev)[$id] ?? '') === $v) continue;
+                $get->execute([$id]);
+                $row = $get->fetch(PDO::FETCH_ASSOC);
+                if ($row) $upd->execute([$v, (int) $row['category_id'], (int) $row['sid'], $row['name']]);
+            }
+        }
+        out(['success' => true]);
+
+    // ============================== VIDEO AD ==============================
+    case 'video_ad_get':
+    case 'video_ad_save':
+        $keys = ['video_ad_enabled' => '0', 'video_ad_src' => '', 'video_ad_interval_minutes' => '3', 'video_ad_min_seconds' => '30', 'video_ad_link_type' => 'none', 'video_ad_link_value' => ''];
+        foreach ($keys as $k => $d) $pdo->prepare('INSERT IGNORE INTO settings(setting_key, setting_value) VALUES(?, ?)')->execute([$k, $d]);
+        if ($action === 'video_ad_save') {
+            apx_put_setting($pdo, 'video_ad_enabled', !empty($b['enabled']) && (string) $b['enabled'] !== '0' ? '1' : '0');
+            apx_put_setting($pdo, 'video_ad_interval_minutes', (string) max(1, (int) ($b['interval'] ?? 3)));
+            apx_put_setting($pdo, 'video_ad_min_seconds', (string) max(5, (int) ($b['min_seconds'] ?? 30)));
+            $lt = in_array($b['link_type'] ?? '', ['none', 'product', 'category', 'url'], true) ? $b['link_type'] : 'none';
+            $lv = '';
+            if ($lt === 'product' || $lt === 'category') $lv = (string) (int) ($b['link_value'] ?? 0);
+            if ($lt === 'url') $lv = substr(trim((string) ($b['link_value'] ?? '')), 0, 255);
+            apx_put_setting($pdo, 'video_ad_link_type', $lt);
+            apx_put_setting($pdo, 'video_ad_link_value', $lv);
+            $saved = null;
+            if (!empty($_FILES['video']['name']) && ($_FILES['video']['error'] ?? 1) === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($_FILES['video']['name'], PATHINFO_EXTENSION));
+                if (!in_array($ext, ['mp4', 'webm', 'mov'], true)) fail('Video must be MP4, WebM or MOV.');
+                if ($_FILES['video']['size'] > 40 * 1024 * 1024) fail('Video must be 40MB or smaller.');
+                $dir = __DIR__ . '/../uploads/ads';
+                if (!is_dir($dir)) @mkdir($dir, 0775, true);
+                $name = bin2hex(random_bytes(10)) . '.' . $ext;
+                if (move_uploaded_file($_FILES['video']['tmp_name'], "$dir/$name")) $saved = "uploads/ads/$name";
+                else fail('Could not save the video.');
+            }
+            if ($saved) apx_put_setting($pdo, 'video_ad_src', $saved);
+            elseif (!empty($b['clear_video']) && (string) $b['clear_video'] !== '0') apx_put_setting($pdo, 'video_ad_src', '');
+            out(['success' => true]);
+        }
+        $cur = [];
+        foreach (apx_rows($pdo, 'SELECT setting_key, setting_value FROM settings') as $r) $cur[$r['setting_key']] = (string) $r['setting_value'];
+        out(['success' => true, 'settings' => $cur,
+            'products' => apx_rows($pdo, "SELECT id, name FROM products WHERE status = 'approved' ORDER BY name LIMIT 500"),
+            'categories' => apx_rows($pdo, 'SELECT id, name FROM categories ORDER BY name')]);
+
+    // ============================== ALERTS (IANOVA / Sellers) ==============================
+    case 'alerts_tab':
+        $tab = (($_GET['tab'] ?? '') === 'sellers') ? 'sellers' : 'main';
+        $scope = $tab === 'sellers' ? 'n.seller_id IS NOT NULL' : 'n.seller_id IS NULL';
+        out(['success' => true, 'tab' => $tab,
+            'unread_main' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM admin_notifications WHERE read_at IS NULL AND seller_id IS NULL'),
+            'unread_sellers' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM admin_notifications WHERE read_at IS NULL AND seller_id IS NOT NULL'),
+            'auto' => ops_setting($pdo, 'auto_approve', '1') === '1',
+            'alerts' => apx_rows($pdo, "SELECT n.id, n.kind, n.title, n.body, n.link, n.seller_id, n.created_at, n.read_at, COALESCE(s.business_name,'') seller_name FROM admin_notifications n LEFT JOIN sellers s ON s.id = n.seller_id WHERE $scope ORDER BY n.id DESC LIMIT 100")]);
+
+    case 'alerts_tab_read':
+        $tab = (($b['tab'] ?? '') === 'sellers') ? 'sellers' : 'main';
+        $scope = $tab === 'sellers' ? 'seller_id IS NOT NULL' : 'seller_id IS NULL';
+        if (!empty($b['id'])) $pdo->prepare('UPDATE admin_notifications SET read_at = NOW() WHERE id = ?')->execute([(int) $b['id']]);
+        else $pdo->exec("UPDATE admin_notifications SET read_at = NOW() WHERE read_at IS NULL AND $scope");
+        out(['success' => true]);
+
+    // ============================== BULK PRODUCT UPLOAD ==============================
+    case 'bulk_import':
+        $catId = (int) ($b['category_id'] ?? 0);
+        $csv = (string) ($b['csv'] ?? '');
+        if ($catId < 1) fail('Please choose a category.');
+        if (trim($csv) === '') fail('Paste your CSV rows first.');
+        $h = fopen('php://temp', 'r+');
+        fwrite($h, $csv);
+        rewind($h);
+        $header = array_map(function ($x) { return strtolower(trim((string) $x)); }, fgetcsv($h, 0, ',', '"', '\\') ?: []);
+        $missing = array_diff(['name', 'slug', 'price'], $header);
+        if ($missing) fail('The first line must be the column names. Missing: ' . implode(', ', $missing) . '. Required: name, slug, price. Optional: description, original_price, stock, emoji, bg_color, is_flash_deal, image_url.');
+        $col = array_flip($header);
+        $okCount = 0; $errs = []; $line = 1;
+        $insert = $pdo->prepare("INSERT INTO products (category_id,name,slug,description,price,original_price,emoji,bg_color,stock,is_flash_deal,$img,seller_name,rating,review_count,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,'IANOVA Direct',4.5,0,'approved')");
+        while (($row = fgetcsv($h, 0, ',', '"', '\\')) !== false) {
+            $line++;
+            if (implode('', array_map('trim', $row)) === '') continue;
+            $g = function (string $k) use ($row, $col): string { return isset($col[$k]) ? trim((string) ($row[$col[$k]] ?? '')) : ''; };
+            $name = $g('name'); $slug = $g('slug'); $price = (float) $g('price');
+            if ($name === '' || $slug === '' || $price <= 0) { $errs[] = "Row $line: name, slug and a price above 0 are required."; continue; }
+            $orig = $g('original_price') !== '' ? (float) $g('original_price') : null;
+            $stock = $g('stock') !== '' ? (int) $g('stock') : 100;
+            $emoji = $g('emoji') !== '' ? $g('emoji') : '📦';
+            $bg = $g('bg_color') !== '' ? $g('bg_color') : '#EFF3EC';
+            $flash = in_array(strtolower($g('is_flash_deal')), ['1', 'yes', 'true'], true) ? 1 : 0;
+            $image = null;
+            $url = $g('image_url');
+            if ($url !== '') {
+                $ext = strtolower(pathinfo(parse_url($url, PHP_URL_PATH) ?: '', PATHINFO_EXTENSION));
+                $okExt = ['jpg' => 'jpg', 'jpeg' => 'jpg', 'png' => 'png', 'webp' => 'webp', 'gif' => 'gif'];
+                if (isset($okExt[$ext]) && preg_match('#^https?://#i', $url)) {
+                    $data = @file_get_contents($url, false, stream_context_create(['http' => ['timeout' => 10], 'https' => ['timeout' => 10]]));
+                    if ($data !== false && strlen($data) <= 5 * 1024 * 1024) {
+                        $fn = 'uploads/products/' . bin2hex(random_bytes(10)) . '.' . $okExt[$ext];
+                        if (@file_put_contents(__DIR__ . '/../' . $fn, $data) !== false) $image = $fn;
+                    }
+                }
+            }
+            try {
+                $q = $pdo->prepare('SELECT id FROM products WHERE slug = ? LIMIT 1');
+                $q->execute([$slug]);
+                $ex = $q->fetch(PDO::FETCH_ASSOC);
+                if ($ex) {
+                    $pdo->prepare("UPDATE products SET category_id=?,name=?,description=?,price=?,original_price=?,emoji=?,bg_color=?,stock=?,is_flash_deal=?,$img=COALESCE(NULLIF(?,''),$img),status='approved' WHERE id=?")
+                        ->execute([$catId, $name, $g('description'), $price, $orig, $emoji, $bg, $stock, $flash, $image ?? '', (int) $ex['id']]);
+                } else {
+                    $insert->execute([$catId, $name, $slug, $g('description'), $price, $orig, $emoji, $bg, $stock, $flash, $image]);
+                }
+                $okCount++;
+            } catch (Throwable $e) { $errs[] = "Row $line: could not save '$name'."; }
+        }
+        fclose($h);
+        out(['success' => true, 'saved' => $okCount, 'errors' => $errs]);
 
     default:
         fail('Unknown action.', 404);
