@@ -44,6 +44,8 @@ function send_mail($to, $to_name, $subject, $html_body) {
 }
 
 function send_order_emails(PDO $pdo, int $order_id, string $customer_name, string $customer_email, array $items, float $grand_total) {
+    // email push: the queue sends these (and never sends the same order twice)
+    if (is_file(__DIR__ . '/notify.php')) { require_once __DIR__ . '/notify.php'; notify_order_placed($pdo, $order_id); return; }
     $rows = '';
     foreach ($items as $item) {
         $rows .= '<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;">' . h($item['product']['name']) . ' × ' . (int)$item['qty'] . '</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;">' . CURRENCY . number_format($item['subtotal'], 2) . '</td></tr>';
@@ -118,6 +120,11 @@ function send_seller_reply_email(string $email, string $business, string $messag
 /** Tell the admin a seller wrote or applied. */
 function send_admin_seller_alert(string $business, string $email, string $message): bool {
     if (!defined('ADMIN_EMAIL') || ADMIN_EMAIL === '') return false;
+    if (strpos($message, 'New seller application') === 0 && is_file(__DIR__ . '/notify.php')) {
+        global $pdo; require_once __DIR__ . '/notify.php'; // email push (one alert per applicant)
+        return notify_queue($pdo, 'seller_new:' . md5(strtolower($email)), 'admin', notify_admin_address($pdo), 'Admin', 'New seller application: ' . $business,
+            notify_wrap('New seller application', '<p><strong>' . notify_esc($business) . '</strong> (' . notify_esc($email) . ')</p><div style="background:#F3F4F7;border-radius:12px;padding:12px;white-space:pre-wrap;">' . notify_esc($message) . '</div>'));
+    }
     $html = '<div style="font-family:Arial,sans-serif;color:#0F0F12;max-width:520px;line-height:1.5;">'
         . '<h2>Seller message</h2>'
         . '<p><strong>' . h($business) . '</strong> (' . h($email) . ')</p>'

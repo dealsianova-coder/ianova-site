@@ -9,6 +9,7 @@ require_once __DIR__ . '/../includes/seller_ops.php';
 require_once __DIR__ . '/../includes/gallery.php';
 require_once __DIR__ . '/../includes/display.php';
 require_once __DIR__ . '/../includes/category_images.php';
+require_once __DIR__ . '/../includes/notify.php';
 date_default_timezone_set('Africa/Nairobi');
 
 // ---- admin session (same tokens as api/admin.php) -------------------------------------------
@@ -765,6 +766,52 @@ switch ($action) {
         }
         fclose($h);
         out(['success' => true, 'saved' => $okCount, 'errors' => $errs]);
+
+    // ============================== EMAIL ALERTS ==============================
+    case 'mail_get':
+        notify_ensure($pdo);
+        $flags = [];
+        foreach (['on', 'admin', 'seller', 'customer', 'subs'] as $k) $flags[$k] = ops_setting($pdo, 'mail_' . $k, '1') === '1';
+        out(['success' => true, 'flags' => $flags, 'admin_to' => trim(ops_setting($pdo, 'mail_admin_to', '')), 'default_to' => defined('ADMIN_EMAIL') ? (string) ADMIN_EMAIL : '',
+            'stats' => notify_stats($pdo), 'recent' => notify_recent($pdo, 30),
+            'subscribers' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM newsletter_subscribers'),
+            'newsletters' => apx_rows($pdo, 'SELECT id, subject, recipients, created_at FROM notify_newsletters ORDER BY id DESC LIMIT 10')]);
+
+    case 'mail_save':
+        foreach (['on', 'admin', 'seller', 'customer', 'subs'] as $k) {
+            if (array_key_exists($k, $b)) ops_setting_set($pdo, 'mail_' . $k, !empty($b[$k]) && (string) $b[$k] !== '0' ? '1' : '0');
+        }
+        if (array_key_exists('admin_to', $b)) {
+            $to = trim((string) $b['admin_to']);
+            if ($to !== '' && !filter_var($to, FILTER_VALIDATE_EMAIL)) fail('That admin email address is not valid.');
+            ops_setting_set($pdo, 'mail_admin_to', $to);
+        }
+        out(['success' => true]);
+
+    case 'mail_test':
+        $to = notify_admin_address($pdo);
+        if ($to === '') fail('Set an admin email address first.');
+        if (!notify_stats($pdo)['smtp_ready']) fail('Email sending is not set up yet: SMTP_PASS is empty in config.local.php.');
+        notify_queue($pdo, 'test:' . bin2hex(random_bytes(4)), 'admin', $to, 'Admin', 'Test email from ' . SITE_NAME,
+            notify_wrap('It works', '<p>This is a test email from your ' . notify_esc(SITE_NAME) . ' admin.</p>'), true);
+        $sent = notify_deliver($pdo, 3);
+        out(['success' => true, 'sent' => $sent, 'to' => $to, 'message' => $sent > 0 ? 'Test email sent to ' . $to . '.' : 'The email was queued but the mail server did not accept it yet. Check the log below.']);
+
+    case 'mail_newsletter':
+        $subject = trim((string) ($b['subject'] ?? ''));
+        $text = trim((string) ($b['body'] ?? ''));
+        if ($subject === '' || $text === '') fail('Write a subject and a message.');
+        $test = !empty($b['test']) && (string) $b['test'] !== '0';
+        if ($test && notify_admin_address($pdo) === '') fail('Set an admin email address first.');
+        $n = notify_newsletter($pdo, $subject, $text, $test);
+        $sent = notify_deliver($pdo, 8);
+        out(['success' => true, 'queued' => $n, 'sent' => $sent, 'message' => $test ? 'Test sent to the admin address.' : $n . ' email(s) queued. They are sent in small batches in the background.']);
+
+    case 'mail_flush':
+        notify_scan($pdo);
+        $sent = notify_deliver($pdo, 15);
+        out(['success' => true, 'sent' => $sent, 'stats' => notify_stats($pdo)]);
+
 
     default:
         fail('Unknown action.', 404);

@@ -3,6 +3,7 @@
  * IANOVA Store Header
  */
 require_once __DIR__.'/category_images.php'; cat_img_ensure($pdo);
+require_once __DIR__.'/notify.php'; notify_tick($pdo); // email push
 $categories_nav = $pdo->query("SELECT name, slug, emoji, image FROM categories WHERE is_hidden = 0 AND " . display_sql() . " ORDER BY sort_order")->fetchAll();
 
 $site_settings = [];

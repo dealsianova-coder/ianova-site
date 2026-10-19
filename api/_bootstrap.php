@@ -1,6 +1,8 @@
 <?php
 /** IANOVA mobile API — shared helpers. Every endpoint requires this file. */
 require __DIR__ . '/../config.php';
+require_once __DIR__ . '/../includes/notify.php'; // email push
+notify_tick($pdo);
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
