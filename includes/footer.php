@@ -76,6 +76,7 @@
   <a href="<?= !empty($_SESSION['user_id']) ? 'account.php' : 'login.php' ?>" class="<?= in_array($__cur, ['account.php','login.php','register.php'], true) ? 'is-active' : '' ?>"><span>♙</span>Account</a>
 </nav>
 
+<script src="assets/js/backnav.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>
