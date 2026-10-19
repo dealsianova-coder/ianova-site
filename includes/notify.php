@@ -57,8 +57,11 @@ function notify_money($v): string { return (defined('CURRENCY') ? CURRENCY : 'KS
 
 function notify_wrap(string $heading, string $inner): string {
     $site = defined('SITE_NAME') ? SITE_NAME : 'IANOVA';
+    $head = is_file(__DIR__ . '/../assets/img/ianova-wordmark.png')
+        ? '<img src="cid:ianova-logo" alt="' . notify_esc($site) . '" width="540" style="width:100%;max-width:540px;height:auto;display:block;border-radius:14px 14px 0 0;">'
+        : '<div style="padding:16px 18px;font-weight:800;letter-spacing:2px;">' . notify_esc($site) . '</div>';
     return '<div style="font-family:Arial,sans-serif;color:#17231E;max-width:540px;line-height:1.55;">'
-        . '<div style="background:#17352C;color:#E9B949;padding:14px 18px;border-radius:14px 14px 0 0;font-weight:800;letter-spacing:2px;">' . notify_esc($site) . '</div>'
+        . $head . '<div style="height:3px;background:#E9B949;"></div>'
         . '<div style="border:1px solid #DCE4DF;border-top:0;border-radius:0 0 14px 14px;padding:20px 18px;">'
         . '<h2 style="margin:0 0 10px;">' . notify_esc($heading) . '</h2>' . $inner
         . '<p style="margin-top:22px;color:#6B7973;font-size:13px;">— ' . notify_esc($site) . ' team</p></div></div>';
@@ -88,8 +91,16 @@ function notify_deliver(PDO $pdo, int $limit = 6): int {
         foreach ($rows as $r) {
             $ok = false;
             $err = '';
-            try { $ok = (bool) send_mail($r['to_email'], $r['to_name'], $r['subject'], $r['html']); if (!$ok) $err = 'Mail server refused it'; }
+            $errFile = sys_get_temp_dir() . '/ianova_mail_err.log';
+            @unlink($errFile);
+            $oldLog = ini_set('error_log', $errFile);
+            try { $ok = (bool) send_mail($r['to_email'], $r['to_name'], $r['subject'], $r['html']); }
             catch (Throwable $e) { $err = substr($e->getMessage(), 0, 180); }
+            if ($oldLog !== false) ini_set('error_log', $oldLog);
+            if (!$ok && $err === '') {
+                $last = is_file($errFile) ? trim((string) array_slice(preg_split('/\R/', trim((string) file_get_contents($errFile))), -1)[0]) : '';
+                $err = $last !== '' ? substr(preg_replace('/^\[[^\]]*\]\s*/', '', $last), 0, 180) : 'Mail server refused it';
+            }
             if ($ok) { $pdo->prepare('UPDATE notify_outbox SET sent_at = NOW(), tries = tries + 1, last_error = \'\' WHERE id = ?')->execute([$r['id']]); $sent++; }
             else { $pdo->prepare('UPDATE notify_outbox SET tries = tries + 1, last_error = ? WHERE id = ?')->execute([$err, $r['id']]); }
         }
@@ -208,7 +219,7 @@ function notify_scan(PDO $pdo): void {
     if ($top > $cur) ops_setting_set($pdo, 'mail_c_order', (string) $top);
 
     // 2. order status changes
-    $rows = $pdo->query("SELECT o.id, o.status FROM orders o JOIN notify_seen s ON s.kind = 'o' AND s.ref = o.id WHERE s.val <> o.status ORDER BY o.id LIMIT 60")->fetchAll();
+    $rows = $pdo->query("SELECT o.id, o.status FROM orders o JOIN notify_seen s ON s.kind = 'o' AND s.ref = o.id WHERE s.val COLLATE utf8mb4_unicode_ci <> o.status COLLATE utf8mb4_unicode_ci ORDER BY o.id LIMIT 60")->fetchAll();
     foreach ($rows as $r) {
         $pdo->prepare("UPDATE notify_seen SET val = ? WHERE kind = 'o' AND ref = ?")->execute([$r['status'], $r['id']]);
         notify_order_status($pdo, (int) $r['id'], (string) $r['status']);
@@ -230,7 +241,7 @@ function notify_scan(PDO $pdo): void {
     // 4. seller products: waiting for review (admin) and approved / rejected (seller)
     $rows = $pdo->query("SELECT p.id, p.name, p.status, p.seller_id, s.val AS seen, COALESCE(sl.business_name,'') AS sname, COALESCE(sl.email,'') AS semail
         FROM products p LEFT JOIN notify_seen s ON s.kind = 'p' AND s.ref = p.id LEFT JOIN sellers sl ON sl.id = p.seller_id
-        WHERE s.val IS NULL OR s.val <> p.status ORDER BY p.id LIMIT 200")->fetchAll();
+        WHERE s.val IS NULL OR s.val COLLATE utf8mb4_unicode_ci <> p.status COLLATE utf8mb4_unicode_ci ORDER BY p.id LIMIT 200")->fetchAll();
     $review = []; $decided = []; $maxId = 0;
     foreach ($rows as $r) {
         $maxId = max($maxId, (int) $r['id']);
@@ -345,7 +356,8 @@ function notify_tick(PDO $pdo): void {
     $script = realpath(__DIR__ . '/../notify_cron.php');
     $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
     if ($script && function_exists('exec') && !in_array('exec', $disabled, true) && PHP_BINARY !== '') {
-        @exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+        $sock = (string) ini_get('pdo_mysql.default_socket'); // the worker needs the same database socket as this web server
+        @exec(escapeshellarg(PHP_BINARY) . ($sock !== '' ? ' -d pdo_mysql.default_socket=' . escapeshellarg($sock) : '') . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
         return;
     }
     register_shutdown_function(function () use ($pdo) {

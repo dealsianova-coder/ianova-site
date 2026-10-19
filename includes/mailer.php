@@ -10,6 +10,29 @@ use PHPMailer\PHPMailer\Exception;
  * Send an email via Gmail SMTP. Returns true on success, false on failure
  * (failures are logged, never thrown, so checkout never breaks over email).
  */
+/** The IANOVA wordmark flattened onto white, so it looks the same in light and dark mail apps. */
+function ianova_email_logo(): string {
+    $src = __DIR__ . '/../assets/img/ianova-wordmark.png';
+    if (!is_file($src)) return '';
+    foreach ([__DIR__ . '/../assets/img/ianova-email-logo.png', sys_get_temp_dir() . '/ianova-email-logo.png'] as $dst) {
+        if (is_file($dst) && filemtime($dst) >= filemtime($src)) return $dst;
+    }
+    if (function_exists('imagecreatefrompng')) {
+        $im = @imagecreatefrompng($src);
+        if ($im) {
+            $w = imagesx($im); $h = imagesy($im); $pad = (int) round($h * 0.35);
+            $out = imagecreatetruecolor($w + 2 * $pad, $h + 2 * $pad);
+            imagefill($out, 0, 0, imagecolorallocate($out, 255, 255, 255));
+            imagealphablending($out, true);
+            imagecopy($out, $im, $pad, $pad, 0, 0, $w, $h);
+            foreach ([__DIR__ . '/../assets/img/ianova-email-logo.png', sys_get_temp_dir() . '/ianova-email-logo.png'] as $dst) {
+                if (@imagepng($out, $dst)) return $dst;
+            }
+        }
+    }
+    return $src;
+}
+
 function send_mail($to, $to_name, $subject, $html_body) {
     if (!class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
         error_log('Mail not sent: PHPMailer is missing. Run `composer install`.');
@@ -33,6 +56,14 @@ function send_mail($to, $to_name, $subject, $html_body) {
         $mail->addAddress($to, $to_name);
         $mail->isHTML(true);
         $mail->Subject = $subject;
+        // IANOVA logo on every email (embedded, so it shows even when the site is only on a phone)
+        $logo = ianova_email_logo();
+        if ($logo !== '') {
+            if (strpos($html_body, 'cid:ianova-logo') === false) {
+                $html_body = '<div style="max-width:520px;margin-bottom:14px;"><img src="cid:ianova-logo" alt="IANOVA" width="540" style="width:100%;max-width:540px;height:auto;display:block;"><div style="height:3px;background:#E9B949;"></div></div>' . $html_body;
+            }
+            $mail->addEmbeddedImage($logo, 'ianova-logo', 'ianova-logo.png');
+        }
         $mail->Body = $html_body;
 
         $mail->send();
