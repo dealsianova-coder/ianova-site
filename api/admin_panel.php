@@ -10,6 +10,7 @@ require_once __DIR__ . '/../includes/gallery.php';
 require_once __DIR__ . '/../includes/display.php';
 require_once __DIR__ . '/../includes/category_images.php';
 require_once __DIR__ . '/../includes/notify.php';
+require_once __DIR__ . '/../includes/analytics.php';
 date_default_timezone_set('Africa/Nairobi');
 
 // ---- admin session (same tokens as api/admin.php) -------------------------------------------
@@ -18,7 +19,8 @@ $token = bearer();
 if ($token === '') fail('Please sign in as admin.', 401);
 $st0 = $pdo->prepare('SELECT a.id FROM admin_tokens t JOIN admins a ON a.id = t.admin_id WHERE t.token_hash = ? AND t.expires_at > NOW() LIMIT 1');
 $st0->execute([hash('sha256', $token)]);
-if (!$st0->fetch()) fail('Admin session expired. Please sign in again.', 401);
+$meAdmin = $st0->fetch(PDO::FETCH_ASSOC);
+if (!$meAdmin) fail('Admin session expired. Please sign in again.', 401);
 
 $b = body();
 if (!$b) $b = $_POST;
@@ -398,7 +400,20 @@ switch ($action) {
 
     // ============================== USERS ==============================
     case 'users_list':
-        out(['success' => true, 'users' => apx_rows($pdo, 'SELECT u.id, u.name, u.email, u.created_at, COUNT(o.id) orders FROM users u LEFT JOIN orders o ON o.user_id = u.id GROUP BY u.id ORDER BY u.id DESC LIMIT 500')]);
+        out(['success' => true,
+            'me' => (int) $meAdmin['id'],
+            'admins' => apx_rows($pdo, 'SELECT id, name, email, last_login, created_at FROM admins ORDER BY id'),
+            'sellers' => apx_rows($pdo, 'SELECT s.id, s.business_name, s.email, s.status, s.created_at, COUNT(p.id) products FROM sellers s LEFT JOIN products p ON p.seller_id = s.id GROUP BY s.id ORDER BY s.id DESC LIMIT 500'),
+            'users' => apx_rows($pdo, 'SELECT u.id, u.name, u.email, u.created_at, COUNT(o.id) orders FROM users u LEFT JOIN orders o ON o.user_id = u.id GROUP BY u.id ORDER BY u.id DESC LIMIT 500')]);
+
+    case 'admin_account_save':
+        $id = (int) ($b['id'] ?? 0);
+        $name = trim((string) ($b['name'] ?? ''));
+        $email = strtolower(trim((string) ($b['email'] ?? '')));
+        if ($id < 1 || $name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('Enter a name and a valid email for the admin.');
+        try { $pdo->prepare('UPDATE admins SET name = ?, email = ? WHERE id = ?')->execute([$name, $email, $id]); }
+        catch (Throwable $e) { fail('That email is already used by another admin.'); }
+        out(['success' => true]);
 
     case 'user_save':
         $id = (int) ($b['id'] ?? 0);
@@ -766,6 +781,10 @@ switch ($action) {
         }
         fclose($h);
         out(['success' => true, 'saved' => $okCount, 'errors' => $errs]);
+
+    // ============================== ANALYTICS ==============================
+    case 'analytics':
+        out(['success' => true] + analytics_data($pdo, (int) ($_GET['months'] ?? $b['months'] ?? 6)));
 
     // ============================== EMAIL ALERTS ==============================
     case 'mail_get':
