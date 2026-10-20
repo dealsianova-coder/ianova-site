@@ -49,8 +49,8 @@ function analytics_data(PDO $pdo, int $months = 6): array {
     foreach ($recent as &$r) { $r['id'] = (int) $r['id']; $r['total'] = (float) $r['total']; $r['items'] = (int) $r['items']; $r['product'] = (string) ($r['product'] ?? ''); }
     unset($r);
 
-    $top = $rows("SELECT MIN(p.name) name, SUM(oi.quantity) sold FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN products p ON p.id = oi.product_id WHERE o.status <> 'cancelled' GROUP BY LOWER(TRIM(p.name)) ORDER BY sold DESC LIMIT 5");
-    foreach ($top as &$r) $r['sold'] = (int) $r['sold'];
+    $top = $rows("SELECT MIN(p.name) name, MIN(p.id) id, SUM(oi.quantity) sold FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN products p ON p.id = oi.product_id WHERE o.status <> 'cancelled' GROUP BY LOWER(TRIM(p.name)) ORDER BY sold DESC LIMIT 5");
+    foreach ($top as &$r) { $r['sold'] = (int) $r['sold']; $r['id'] = (int) $r['id']; }
     unset($r);
 
     return [
