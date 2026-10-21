@@ -38,6 +38,5 @@ $qty = (int) $line['quantity']; $price = (float) $line['unit_price'];
   <div class="card" style="border-left:5px solid <?= $sid === 0 ? '#1d6b52' : '#b58117' ?>"><h3 style="margin:0 0 8px">Sold by</h3>
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><b><?= $sid === 0 ? '🏠 IANOVA (main)' : '🏪 ' . admin_h($line['seller_name'] ?? '') ?></b>
     <?php if ($sid === 0): ?><span class="tag na">Managed by you</span><?php else: ?><?= aou_approval_tags(isset($appr[$sid]) ? [$sid => $appr[$sid]] : []) ?><?php endif; ?></div></div>
-  <div class="actions"><?php if ($pid): ?><a class="btn gray" href="product_view.php?id=<?= $pid ?>">View product</a><?php endif; ?></div>
 </div>
 <?php require 'includes/footer.php'; ?>
