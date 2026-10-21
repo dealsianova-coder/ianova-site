@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int) ($_POST['id'] ?? 0);
     $status = $_POST['status'] ?? '';
     if ($id > 0 && in_array($status, $statuses, true)) {
-        $pdo->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute([$status, $id]);
+        require_once __DIR__ . '/../includes/seller_orders.php'; set_order_status($pdo, $id, $status);
     }
     header('Location: orders.php' . ($_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : ''));
     exit;
@@ -93,7 +93,7 @@ echo aou_css();
     <td><b><?= CURRENCY . number_format(aou_lines_total($lines), 2) ?></b></td>
     <td><?= aou_approval_tags(isset($appr[(int) $o['id']][$sid]) ? [$sid => $appr[(int) $o['id']][$sid]] : []) ?></td>
     <td><form method="post" class="stbar"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>"><input type="hidden" name="id" value="<?= (int) $o['id'] ?>">
-      <select name="status"><?php foreach ($statuses as $s): ?><option value="<?= $s ?>" <?= $o['status'] === $s ? 'selected' : '' ?>><?= $s ?></option><?php endforeach; ?></select><button class="btn">Save</button></form></td>
+      <select name="status"<?= $o['status'] === 'cancelled' ? ' disabled title="Cancelled by the customer: locked"' : '' ?>><?php foreach ($statuses as $s): ?><option value="<?= $s ?>" <?= $o['status'] === $s ? 'selected' : '' ?>><?= $s ?></option><?php endforeach; ?></select><button class="btn">Save</button></form></td>
     <td><a class="btn gray" href="order_view.php?id=<?= (int) $o['id'] ?>&tab=sellers">Open</a></td>
   </tr>
   <?php endforeach; ?>
@@ -118,7 +118,7 @@ echo aou_css();
   <td><b><?= CURRENCY . number_format(aou_lines_total($lines), 2) ?></b><br><span class="muted">Order total <?= CURRENCY . number_format((float) $o['total'], 2) ?></span></td>
   <?php if ($tab === 'sellers'): ?><td><?php $ap = $appr[(int) $o['id']] ?? []; if ($sellerId > 0) $ap = array_intersect_key($ap, [$sellerId => 1]); echo aou_approval_tags($ap); ?></td><?php endif; ?>
   <td><form method="post" class="stbar"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>"><input type="hidden" name="id" value="<?= (int) $o['id'] ?>">
-    <select name="status"><?php foreach ($statuses as $s): ?><option value="<?= $s ?>" <?= $o['status'] === $s ? 'selected' : '' ?>><?= $s ?></option><?php endforeach; ?></select><button class="btn">Save</button></form></td>
+    <select name="status"<?= $o['status'] === 'cancelled' ? ' disabled title="Cancelled by the customer: locked"' : '' ?>><?php foreach ($statuses as $s): ?><option value="<?= $s ?>" <?= $o['status'] === $s ? 'selected' : '' ?>><?= $s ?></option><?php endforeach; ?></select><button class="btn">Save</button></form></td>
   <td><a class="btn gray" href="order_view.php?id=<?= (int) $o['id'] ?>&tab=<?= $tab ?>">Open</a></td>
 </tr>
 <?php endforeach; ?>

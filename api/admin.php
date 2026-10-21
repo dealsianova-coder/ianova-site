@@ -88,7 +88,7 @@ switch ($action) {
         $id = (int) ($b['id'] ?? 0);
         $status = (string) ($b['status'] ?? '');
         if ($id < 1 || !in_array($status, ['pending', 'approved', 'paid', 'shipped', 'delivered', 'cancelled'], true)) fail('Invalid order or status.');
-        $pdo->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute([$status, $id]);
+        require_once __DIR__ . '/../includes/seller_orders.php'; $__m = set_order_status($pdo, $id, $status); if ($__m !== '') fail($__m, 409);
         out(['success' => true]);
 
     case 'store_get':

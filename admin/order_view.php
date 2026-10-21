@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     admin_check_csrf();
     $status = $_POST['status'] ?? '';
     if ($id > 0 && in_array($status, $statuses, true)) {
-        $pdo->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute([$status, $id]);
+        require_once __DIR__ . '/../includes/seller_orders.php'; set_order_status($pdo, $id, $status);
     }
     header('Location: order_view.php?id=' . $id . '&tab=' . $tab);
     exit;
@@ -43,7 +43,7 @@ if (!$groups['0']['lines']) unset($groups['0']);
       <div class="muted"><?= admin_h($o['created_at']) ?></div>
     </div>
     <form method="post" class="stbar"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>">
-      <select name="status"><?php foreach ($statuses as $st): ?><option value="<?= $st ?>" <?= $o['status'] === $st ? 'selected' : '' ?>><?= $st ?></option><?php endforeach; ?></select><button class="btn">Update status</button></form>
+      <select name="status"<?= $o['status'] === 'cancelled' ? ' disabled title="Cancelled by the customer: locked"' : '' ?>><?php foreach ($statuses as $st): ?><option value="<?= $st ?>" <?= $o['status'] === $st ? 'selected' : '' ?>><?= $st ?></option><?php endforeach; ?></select><button class="btn">Update status</button></form>
   </div>
   <div class="row" style="margin-top:14px">
     <div><b>Customer</b><br><?= admin_h($o['customer']) ?><br><span class="muted"><?= admin_h($o['email'] ?? '') ?></span></div>
