@@ -8,9 +8,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $kind = $_POST['kind'] ?? 'customer';
     $id = (int) ($_POST['id'] ?? 0);
     if ($kind === 'admin') {
-        $name = trim((string) ($_POST['name'] ?? '')); $email = strtolower(trim((string) ($_POST['email'] ?? '')));
-        if ($id < 1 || $name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) $error = 'Enter a name and a valid email for the admin.';
-        else { try { $pdo->prepare('UPDATE admins SET name = ?, email = ? WHERE id = ?')->execute([$name, $email, $id]); $notice = 'Admin saved.'; } catch (Throwable $e) { $error = 'That email is already used by another admin.'; } }
+        $name = trim((string) ($_POST['name'] ?? '')); $email = strtolower(trim((string) ($_POST['email'] ?? ''))); $newpw = (string) ($_POST['new_password'] ?? '');
+        $hq = $pdo->prepare('SELECT password_hash FROM admins WHERE id = ?'); $hq->execute([$meId]);
+        if ($id !== $meId || $meId < 1) $error = 'The admin account is protected. You can only edit your own admin account.';
+        elseif (!password_verify((string) ($_POST['current_password'] ?? ''), (string) $hq->fetchColumn())) { usleep(900000); $error = 'Security check failed: enter your current admin password.'; }
+        elseif ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) $error = 'Enter a name and a valid email for the admin.';
+        elseif ($newpw !== '' && strlen($newpw) < 8) $error = 'The new password must be at least 8 characters.';
+        else {
+            $dup = $pdo->prepare('SELECT (SELECT COUNT(*) FROM users WHERE LOWER(email) = ?) + (SELECT COUNT(*) FROM sellers WHERE LOWER(email) = ?) + (SELECT COUNT(*) FROM admins WHERE LOWER(email) = ? AND id <> ?)');
+            $dup->execute([$email, $email, $email, $id]);
+            if ((int) $dup->fetchColumn() > 0) $error = 'That email is already used by another account. The admin email must be unique.';
+            else { $pdo->prepare('UPDATE admins SET name = ?, email = ? WHERE id = ?')->execute([$name, $email, $id]); if ($newpw !== '') $pdo->prepare('UPDATE admins SET password_hash = ? WHERE id = ?')->execute([password_hash($newpw, PASSWORD_DEFAULT), $id]); $notice = 'Admin saved.'; }
+        }
     } elseif (isset($_POST['delete'])) {
         $pdo->prepare('DELETE FROM users WHERE id=?')->execute([$id]);
     } else {
@@ -41,10 +50,14 @@ if ($notice): ?><div class="notice"><?= admin_h($notice) ?></div><?php endif; if
 <?php if ($role === 'all' || $role === 'admin'): ?>
 <div class="card" style="border-left:6px solid #e9b949;margin-bottom:18px"><h2 style="margin:0 0 4px">👑 Admin <?= $badge('FULL CONTROL', '#17352c', '#e9b949') ?></h2>
 <p class="muted" style="margin-top:0">The store owner accounts. Only these can sign in to this admin and the Admin app. Everything here is separate from sellers and customers.</p>
-<?php foreach ($admins as $a): ?><form method="post" class="row" style="align-items:end;border-top:1px solid #e8eeea;padding-top:12px;margin-top:12px"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>"><input type="hidden" name="kind" value="admin"><input type="hidden" name="id" value="<?= (int) $a['id'] ?>">
-<div class="field" style="margin:0"><label>Name <?= (int) $a['id'] === $meId ? $badge('YOU', '#e1f3e8', '#166534') : '' ?></label><input name="name" value="<?= admin_h($a['name']) ?>"></div>
+<?php foreach ($admins as $a): $mine = (int) $a['id'] === $meId; ?>
+<?php if ($mine): ?><form method="post" class="row" style="align-items:end;border-top:1px solid #e8eeea;padding-top:12px;margin-top:12px"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>"><input type="hidden" name="kind" value="admin"><input type="hidden" name="id" value="<?= (int) $a['id'] ?>">
+<div class="field" style="margin:0"><label>Name <?= $badge('YOU', '#e1f3e8', '#166534') ?></label><input name="name" value="<?= admin_h($a['name']) ?>"></div>
 <div class="field" style="margin:0"><label>Email</label><input type="email" name="email" value="<?= admin_h($a['email']) ?>"></div>
-<div class="muted">Last sign-in: <?= admin_h($a['last_login'] ?: 'never') ?></div><div><button class="btn">Save</button></div></form><?php endforeach; ?>
+<div class="field" style="margin:0"><label>New password (optional)</label><input type="password" name="new_password" autocomplete="new-password" placeholder="leave empty to keep"></div>
+<div class="field" style="margin:0"><label>🔒 Current password (required)</label><input type="password" name="current_password" autocomplete="current-password" required></div>
+<div class="muted">Last sign-in: <?= admin_h($a['last_login'] ?: 'never') ?></div><div><button class="btn">Save</button></div></form>
+<?php else: ?><div class="row" style="border-top:1px solid #e8eeea;padding-top:12px;margin-top:12px"><div><strong><?= admin_h($a['name']) ?></strong><div class="muted"><?= admin_h($a['email']) ?></div></div><div class="muted">🔒 Protected: only this admin can edit this account.</div></div><?php endif; endforeach; ?>
 <?php if (!$admins): ?><p class="muted">No admin accounts found.</p><?php endif; ?></div>
 <?php endif; ?>
 

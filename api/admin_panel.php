@@ -407,12 +407,22 @@ switch ($action) {
             'users' => apx_rows($pdo, 'SELECT u.id, u.name, u.email, u.created_at, COUNT(o.id) orders FROM users u LEFT JOIN orders o ON o.user_id = u.id GROUP BY u.id ORDER BY u.id DESC LIMIT 500')]);
 
     case 'admin_account_save':
+        // Security gate: only the signed-in admin can edit the admin account, and only with the current password.
         $id = (int) ($b['id'] ?? 0);
+        if ($id !== (int) $meAdmin['id']) fail('The admin account is protected. You can only edit your own admin account.', 403);
+        $cur = (string) ($b['current_password'] ?? '');
+        $hq = $pdo->prepare('SELECT password_hash FROM admins WHERE id = ?'); $hq->execute([$id]);
+        if ($cur === '' || !password_verify($cur, (string) $hq->fetchColumn())) { usleep(900000); fail('Security check failed: enter your current admin password.', 403); }
         $name = trim((string) ($b['name'] ?? ''));
         $email = strtolower(trim((string) ($b['email'] ?? '')));
-        if ($id < 1 || $name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('Enter a name and a valid email for the admin.');
-        try { $pdo->prepare('UPDATE admins SET name = ?, email = ? WHERE id = ?')->execute([$name, $email, $id]); }
-        catch (Throwable $e) { fail('That email is already used by another admin.'); }
+        $newpw = (string) ($b['new_password'] ?? '');
+        if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('Enter a name and a valid email for the admin.');
+        if ($newpw !== '' && strlen($newpw) < 8) fail('The new password must be at least 8 characters.');
+        $dup = $pdo->prepare('SELECT (SELECT COUNT(*) FROM users WHERE LOWER(email) = ?) + (SELECT COUNT(*) FROM sellers WHERE LOWER(email) = ?) + (SELECT COUNT(*) FROM admins WHERE LOWER(email) = ? AND id <> ?)');
+        $dup->execute([$email, $email, $email, $id]);
+        if ((int) $dup->fetchColumn() > 0) fail('That email is already used by another account. The admin email must be unique.');
+        $pdo->prepare('UPDATE admins SET name = ?, email = ? WHERE id = ?')->execute([$name, $email, $id]);
+        if ($newpw !== '') $pdo->prepare('UPDATE admins SET password_hash = ? WHERE id = ?')->execute([password_hash($newpw, PASSWORD_DEFAULT), $id]);
         out(['success' => true]);
 
     case 'user_save':
