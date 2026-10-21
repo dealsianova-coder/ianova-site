@@ -11,6 +11,7 @@ function team_ensure(PDO $pdo): void {
         $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_master TINYINT NOT NULL DEFAULT 0");
         $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS security_hash VARCHAR(255) NULL");
         $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS added_by INT NULL");
+        $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS perms TEXT NULL");
         $pdo->exec("CREATE TABLE IF NOT EXISTS admin_sec_fail (admin_id INT PRIMARY KEY, fails INT NOT NULL DEFAULT 0, until_at DATETIME NULL) ENGINE=InnoDB");
         if (!(int) $pdo->query('SELECT COUNT(*) FROM admins WHERE is_master = 1')->fetchColumn()) {
             $pdo->exec('UPDATE admins SET is_master = 1 WHERE id = (SELECT m FROM (SELECT MIN(id) m FROM admins) x)');
@@ -97,7 +98,7 @@ function team_edit_self(PDO $pdo, int $id, string $name, string $email, string $
 }
 
 /** Master adds another admin; it stays pending until approved. '' = created. */
-function team_add(PDO $pdo, int $masterId, string $name, string $email, string $loginPw, string $security): string {
+function team_add(PDO $pdo, int $masterId, string $name, string $email, string $loginPw, string $security, array $perms = []): string {
     if (!team_is_master($pdo, $masterId)) return 'Only the master admin can add admins.';
     $m = team_verify($pdo, $masterId, $security);
     if ($m !== '') return $m;
@@ -105,8 +106,8 @@ function team_add(PDO $pdo, int $masterId, string $name, string $email, string $
     if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) return 'Enter a name and a valid email for the new admin.';
     if (strlen($loginPw) < 8) return 'The new admin needs a sign-in password of at least 8 characters.';
     if (team_email_taken($pdo, $email)) return 'That email is already used by another account.';
-    $pdo->prepare("INSERT INTO admins (name, email, password_hash, status, is_master, added_by) VALUES (?, ?, ?, 'pending', 0, ?)")
-        ->execute([$name, $email, password_hash($loginPw, PASSWORD_DEFAULT), $masterId]);
+    $pdo->prepare("INSERT INTO admins (name, email, password_hash, status, is_master, added_by, perms) VALUES (?, ?, ?, 'pending', 0, ?, ?)")
+        ->execute([$name, $email, password_hash($loginPw, PASSWORD_DEFAULT), $masterId, team_clean_perms($perms)]);
     return '';
 }
 
@@ -128,5 +129,114 @@ function team_do(PDO $pdo, int $masterId, int $id, string $do, string $security)
 
 function team_list(PDO $pdo): array {
     team_ensure($pdo);
-    return $pdo->query("SELECT id, name, email, last_login, created_at, status, is_master, (security_hash IS NOT NULL AND security_hash <> '') has_security FROM admins ORDER BY is_master DESC, id")->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $pdo->query("SELECT id, name, email, last_login, created_at, status, is_master, perms, (security_hash IS NOT NULL AND security_hash <> '') has_security FROM admins ORDER BY is_master DESC, id")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as &$r) { $r['allowed'] = team_allowed($r); unset($r['perms']); }
+    return $rows;
+}
+
+// ---------------------------------------------------------------- what each admin can see
+/** key => [label, web pages]. The master always sees everything; Admin team is open to every admin (own account). */
+function team_sections(): array {
+    return [
+        'dashboard' => ['📊 Dashboard', ['index.php']],
+        'analytics' => ['📈 Analytics', ['analytics.php']],
+        'products' => ['📦 Products', ['products.php', 'product_view.php', 'product_edit.php', 'product_approve.php', 'product_delete.php', 'product_hide.php', 'product_unhide.php', 'products_bulk.php', 'products_bulk_template.php']],
+        'categories' => ['🏷️ Categories', ['categories.php']],
+        'orders' => ['🛒 Orders', ['orders.php', 'order_view.php']],
+        'users' => ['👥 Users (sellers & customers)', ['users.php']],
+        'sellers' => ['🏪 Sellers', ['sellers.php', 'seller_messages.php']],
+        'broadcast' => ['📢 Broadcast', ['broadcast.php']],
+        'subscribers' => ['✉️ Subscribers', ['subscribers.php']],
+        'suggestions' => ['💡 Suggestions', ['suggestions.php']],
+        'email' => ['📧 Email alerts', ['email.php']],
+        'banners' => ['🖼️ Banners', ['banners.php']],
+        'video' => ['🎬 Video ad', ['video_ad.php']],
+        'store' => ['🎛️ Store control', ['store.php']],
+        'display' => ['🖥️ Display control', ['display.php']],
+        'flash' => ['⚡ Flash deals', ['flash.php']],
+        'settings' => ['⚙️ Settings', ['settings.php']],
+        'alerts' => ['🔔 Alerts', ['notifications.php']],
+    ];
+}
+
+function team_clean_perms(array $perms): string {
+    $ok = array_keys(team_sections());
+    return implode(',', array_values(array_intersect($ok, array_map('strval', $perms))));
+}
+
+/** Allowed section keys for an admin row (needs is_master and perms). NULL perms = legacy admin with full access. */
+function team_allowed(array $row): array {
+    $all = array_keys(team_sections());
+    if ((int) ($row['is_master'] ?? 0) === 1 || !array_key_exists('perms', $row) || $row['perms'] === null) return $all;
+    return array_values(array_intersect($all, array_filter(explode(',', (string) $row['perms']))));
+}
+
+function team_can(PDO $pdo, int $id, string $section): bool {
+    team_ensure($pdo);
+    $s = $pdo->prepare('SELECT is_master, perms FROM admins WHERE id = ?'); $s->execute([$id]);
+    $r = $s->fetch(PDO::FETCH_ASSOC);
+    return $r ? in_array($section, team_allowed($r), true) : false;
+}
+
+function team_allowed_for(PDO $pdo, int $id): array {
+    team_ensure($pdo);
+    $s = $pdo->prepare('SELECT is_master, perms FROM admins WHERE id = ?'); $s->execute([$id]);
+    $r = $s->fetch(PDO::FETCH_ASSOC);
+    return $r ? team_allowed($r) : [];
+}
+
+function team_set_perms(PDO $pdo, int $masterId, int $id, array $perms, string $security): string {
+    if (!team_is_master($pdo, $masterId)) return 'Only the master admin can change what other admins see.';
+    $m = team_verify($pdo, $masterId, $security);
+    if ($m !== '') return $m;
+    $s = $pdo->prepare('SELECT is_master FROM admins WHERE id = ?'); $s->execute([$id]);
+    $r = $s->fetch(PDO::FETCH_ASSOC);
+    if (!$r || (int) $r['is_master'] === 1 || $id === $masterId) return 'Admin not found.';
+    $pdo->prepare('UPDATE admins SET perms = ? WHERE id = ?')->execute([team_clean_perms($perms), $id]);
+    return '';
+}
+
+/** Which section an API action belongs to (null = not restricted). $file is "panel" (admin_panel.php) or "admin" (admin.php). */
+function team_section_of_action(string $file, string $a): ?string {
+    if ($file === 'admin') {
+        $m = ['summary' => 'dashboard', 'products' => 'products', 'product_update' => 'products', 'orders' => 'orders', 'order_status' => 'orders',
+              'store_get' => 'store', 'store_set' => 'store', 'alerts' => 'alerts', 'alerts_read' => 'alerts', 'broadcast_options' => 'broadcast', 'broadcast_send' => 'broadcast'];
+        if (isset($m[$a])) return $m[$a];
+        return strpos($a, 'seller_') === 0 ? 'sellers' : null;
+    }
+    $exact = ['dashboard' => 'dashboard', 'analytics' => 'analytics', 'orders_list' => 'orders', 'order_view' => 'orders', 'bulk_import' => 'products',
+        'users_list' => 'users', 'user_save' => 'users', 'user_delete' => 'users', 'sellers_full' => 'sellers', 'seller_action' => 'sellers', 'auto_master' => 'sellers',
+        'subscribers_list' => 'subscribers', 'subscriber_delete' => 'subscribers', 'suggestions_list' => 'suggestions', 'suggestion_reviewed' => 'suggestions',
+        'alerts_tab' => 'alerts', 'alerts_tab_read' => 'alerts', 'settings_get' => 'settings', 'settings_set' => 'settings'];
+    if (isset($exact[$a])) return $exact[$a];
+    foreach (['product' => 'products', 'category' => 'categories', 'categories' => 'categories', 'banner' => 'banners', 'flash' => 'flash', 'display' => 'display', 'video_ad' => 'video', 'mail' => 'email'] as $pre => $sec) {
+        if (strpos($a, $pre . '_') === 0 || $a === $pre . 's_list') return $sec;
+    }
+    return null;
+}
+
+/** Website admin: block pages the admin may not see and hide their menu links. */
+function team_page_guard(PDO $pdo, int $id): void {
+    team_ensure($pdo);
+    $allowed = team_allowed_for($pdo, $id);
+    $page = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    $hide = [];
+    foreach (team_sections() as $key => $def) {
+        foreach ($def[1] as $f) {
+            if (!in_array($key, $allowed, true)) { $hide[] = preg_quote($f, '~'); if ($f === $page) $block = $key; }
+        }
+    }
+    if (isset($block)) {
+        if ($block === 'dashboard') {
+            foreach (team_sections() as $k => $def) if (in_array($k, $allowed, true)) { header('Location: ' . $def[1][0]); exit; }
+            if (!headers_sent()) http_response_code(403);
+            exit('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;padding:40px;text-align:center"><h2>🔒 No access yet</h2><p>The master admin has not given you access to any section yet.</p><p><a href="admins.php">Admin team</a> · <a href="logout.php">Sign out</a></p></body>');
+        }
+        http_response_code(403);
+        exit('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;padding:40px;text-align:center"><h2>🔒 You do not have access to this section</h2><p>Ask the master admin if you need it.</p><p><a href="index.php">Back</a></p></body>');
+    }
+    if ($hide) {
+        $re = '~<a\b[^>]*href="(?:' . implode('|', $hide) . ')(?:\?[^"]*)?"[^>]*>.*?</a>~is';
+        ob_start(function ($html) use ($re) { return preg_replace($re, '', $html) ?? $html; });
+    }
 }

@@ -29,7 +29,11 @@ $token = bearer();
 if ($token === '') fail('Please sign in as admin.', 401);
 $s = $pdo->prepare('SELECT a.id, a.name FROM admin_tokens t JOIN admins a ON a.id = t.admin_id WHERE t.token_hash = ? AND t.expires_at > NOW() LIMIT 1');
 $s->execute([hash('sha256', $token)]);
-if (!$s->fetch()) fail('Admin session expired. Please sign in again.', 401);
+$__adm = $s->fetch();
+if (!$__adm) fail('Admin session expired. Please sign in again.', 401);
+require_once __DIR__ . '/../includes/admin_team.php';
+$__sec = team_section_of_action('admin', (string) $action);
+if ($__sec !== null && !team_can($pdo, (int) $__adm['id'], $__sec)) fail('You do not have access to this section. Ask the master admin.', 403);
 
 function put_setting(PDO $pdo, string $key, string $value): void {
     $pdo->prepare('INSERT IGNORE INTO settings(setting_key, setting_value) VALUES(?, ?)')->execute([$key, $value]);

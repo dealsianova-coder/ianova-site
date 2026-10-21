@@ -6,6 +6,7 @@ if (empty($_SESSION['admin_id'])) {
 }
 require_once __DIR__ . '/../../includes/admin_team.php';
 if (isset($pdo) && team_login_block($pdo, ['id' => (int) $_SESSION['admin_id']]) !== '') { unset($_SESSION['admin_id']); header('Location: login.php'); exit; }
+team_page_guard($pdo, (int) $_SESSION['admin_id']); // what this admin may see
 function admin_h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 function admin_csrf() {
     if (empty($_SESSION['admin_csrf'])) $_SESSION['admin_csrf'] = bin2hex(random_bytes(32));

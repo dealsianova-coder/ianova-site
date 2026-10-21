@@ -99,6 +99,10 @@ function apx_slugify(string $v): string { return trim((string) preg_replace('/[^
 $STATUSES = ['pending', 'approved', 'paid', 'shipped', 'delivered', 'cancelled'];
 $img = image_column($pdo);
 
+// What this admin may see (set by the master admin). The master and legacy admins see everything.
+$__sec = team_section_of_action('panel', (string) $action);
+if ($__sec !== null && !team_can($pdo, (int) $meAdmin['id'], $__sec)) fail('You do not have access to this section. Ask the master admin.', 403);
+
 switch ($action) {
 
     // ============================== DASHBOARD ==============================
@@ -171,6 +175,8 @@ switch ($action) {
             'pending_orders' => (int) apx_val($pdo, "SELECT COUNT(*) FROM orders WHERE status = 'pending'"),
             'review_products' => (int) apx_val($pdo, "SELECT COUNT(*) FROM products WHERE status = 'pending'"),
             'pending_sellers' => (int) apx_val($pdo, "SELECT COUNT(*) FROM sellers WHERE status = 'pending'"),
+            'master' => team_is_master($pdo, (int) $meAdmin['id']),
+            'allowed' => team_allowed_for($pdo, (int) $meAdmin['id']),
         ]);
 
     // ============================== ORDERS ==============================
@@ -404,11 +410,23 @@ switch ($action) {
     case 'users_list':
         out(['success' => true,
             'me' => (int) $meAdmin['id'],
-            'master' => team_is_master($pdo, (int) $meAdmin['id']),
-            'has_security' => team_has_security($pdo, (int) $meAdmin['id']),
-            'admins' => team_list($pdo),
             'sellers' => apx_rows($pdo, 'SELECT s.id, s.business_name, s.email, s.status, s.created_at, COUNT(p.id) products FROM sellers s LEFT JOIN products p ON p.seller_id = s.id GROUP BY s.id ORDER BY s.id DESC LIMIT 500'),
             'users' => apx_rows($pdo, 'SELECT u.id, u.name, u.email, u.created_at, COUNT(o.id) orders FROM users u LEFT JOIN orders o ON o.user_id = u.id GROUP BY u.id ORDER BY u.id DESC LIMIT 500')]);
+
+    // ============================== ADMIN TEAM (separate from Users) ==============================
+    case 'team_get':
+        $meId = (int) $meAdmin['id'];
+        $isM = team_is_master($pdo, $meId);
+        $rows = team_list($pdo);
+        if (!$isM) $rows = array_values(array_filter($rows, fn($r) => (int) $r['id'] === $meId || (int) $r['is_master'] === 1));
+        $secs = []; foreach (team_sections() as $k => $d) $secs[] = ['key' => $k, 'label' => $d[0]];
+        out(['success' => true, 'me' => $meId, 'master' => $isM, 'has_security' => team_has_security($pdo, $meId), 'admins' => $rows, 'sections' => $secs]);
+
+    case 'team_perms':
+        $perms = $b['perms'] ?? [];
+        $m = team_set_perms($pdo, (int) $meAdmin['id'], (int) ($b['id'] ?? 0), is_array($perms) ? $perms : [], (string) ($b['security_password'] ?? ''));
+        if ($m !== '') fail($m, 403);
+        out(['success' => true]);
 
     case 'admin_account_save':
         // Editing your own admin account needs the security password (separate from the sign-in password).
@@ -423,7 +441,7 @@ switch ($action) {
         out(['success' => true]);
 
     case 'team_add':
-        $m = team_add($pdo, (int) $meAdmin['id'], (string) ($b['name'] ?? ''), (string) ($b['email'] ?? ''), (string) ($b['password'] ?? ''), (string) ($b['security_password'] ?? ''));
+        $m = team_add($pdo, (int) $meAdmin['id'], (string) ($b['name'] ?? ''), (string) ($b['email'] ?? ''), (string) ($b['password'] ?? ''), (string) ($b['security_password'] ?? ''), is_array($b['perms'] ?? null) ? $b['perms'] : []);
         if ($m !== '') fail($m, 403);
         out(['success' => true]);
 
