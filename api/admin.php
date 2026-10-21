@@ -16,6 +16,8 @@ if ($action === 'login') {
     $s->execute([$email]);
     $a = $s->fetch();
     if (!$a || !password_verify($pass, $a['password_hash'])) { auth_record($pdo, 'admin', $email); fail('Incorrect admin email or password.', 401); }
+    require_once __DIR__ . '/../includes/admin_team.php';
+    if (($tm = team_login_block($pdo, $a)) !== '') fail($tm, 403);
     auth_clear($pdo, 'admin', $email);
     $token = bin2hex(random_bytes(32));
     $pdo->prepare('INSERT INTO admin_tokens (admin_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))')

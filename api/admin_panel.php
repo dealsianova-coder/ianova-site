@@ -11,13 +11,15 @@ require_once __DIR__ . '/../includes/display.php';
 require_once __DIR__ . '/../includes/category_images.php';
 require_once __DIR__ . '/../includes/notify.php';
 require_once __DIR__ . '/../includes/analytics.php';
+require_once __DIR__ . '/../includes/admin_team.php';
+team_ensure($pdo);
 date_default_timezone_set('Africa/Nairobi');
 
 // ---- admin session (same tokens as api/admin.php) -------------------------------------------
 $pdo->exec("CREATE TABLE IF NOT EXISTS admin_tokens (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, token_hash CHAR(64) NOT NULL UNIQUE, expires_at DATETIME NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB");
 $token = bearer();
 if ($token === '') fail('Please sign in as admin.', 401);
-$st0 = $pdo->prepare('SELECT a.id FROM admin_tokens t JOIN admins a ON a.id = t.admin_id WHERE t.token_hash = ? AND t.expires_at > NOW() LIMIT 1');
+$st0 = $pdo->prepare('SELECT a.id FROM admin_tokens t JOIN admins a ON a.id = t.admin_id WHERE t.token_hash = ? AND t.expires_at > NOW() AND a.status = \'active\' LIMIT 1');
 $st0->execute([hash('sha256', $token)]);
 $meAdmin = $st0->fetch(PDO::FETCH_ASSOC);
 if (!$meAdmin) fail('Admin session expired. Please sign in again.', 401);
@@ -402,27 +404,32 @@ switch ($action) {
     case 'users_list':
         out(['success' => true,
             'me' => (int) $meAdmin['id'],
-            'admins' => apx_rows($pdo, 'SELECT id, name, email, last_login, created_at FROM admins ORDER BY id'),
+            'master' => team_is_master($pdo, (int) $meAdmin['id']),
+            'has_security' => team_has_security($pdo, (int) $meAdmin['id']),
+            'admins' => team_list($pdo),
             'sellers' => apx_rows($pdo, 'SELECT s.id, s.business_name, s.email, s.status, s.created_at, COUNT(p.id) products FROM sellers s LEFT JOIN products p ON p.seller_id = s.id GROUP BY s.id ORDER BY s.id DESC LIMIT 500'),
             'users' => apx_rows($pdo, 'SELECT u.id, u.name, u.email, u.created_at, COUNT(o.id) orders FROM users u LEFT JOIN orders o ON o.user_id = u.id GROUP BY u.id ORDER BY u.id DESC LIMIT 500')]);
 
     case 'admin_account_save':
-        // Security gate: only the signed-in admin can edit the admin account, and only with the current password.
-        $id = (int) ($b['id'] ?? 0);
-        if ($id !== (int) $meAdmin['id']) fail('The admin account is protected. You can only edit your own admin account.', 403);
-        $cur = (string) ($b['current_password'] ?? '');
-        $hq = $pdo->prepare('SELECT password_hash FROM admins WHERE id = ?'); $hq->execute([$id]);
-        if ($cur === '' || !password_verify($cur, (string) $hq->fetchColumn())) { usleep(900000); fail('Security check failed: enter your current admin password.', 403); }
-        $name = trim((string) ($b['name'] ?? ''));
-        $email = strtolower(trim((string) ($b['email'] ?? '')));
-        $newpw = (string) ($b['new_password'] ?? '');
-        if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('Enter a name and a valid email for the admin.');
-        if ($newpw !== '' && strlen($newpw) < 8) fail('The new password must be at least 8 characters.');
-        $dup = $pdo->prepare('SELECT (SELECT COUNT(*) FROM users WHERE LOWER(email) = ?) + (SELECT COUNT(*) FROM sellers WHERE LOWER(email) = ?) + (SELECT COUNT(*) FROM admins WHERE LOWER(email) = ? AND id <> ?)');
-        $dup->execute([$email, $email, $email, $id]);
-        if ((int) $dup->fetchColumn() > 0) fail('That email is already used by another account. The admin email must be unique.');
-        $pdo->prepare('UPDATE admins SET name = ?, email = ? WHERE id = ?')->execute([$name, $email, $id]);
-        if ($newpw !== '') $pdo->prepare('UPDATE admins SET password_hash = ? WHERE id = ?')->execute([password_hash($newpw, PASSWORD_DEFAULT), $id]);
+        // Editing your own admin account needs the security password (separate from the sign-in password).
+        if ((int) ($b['id'] ?? 0) !== (int) $meAdmin['id']) fail('The admin account is protected. You can only edit your own admin account.', 403);
+        $m = team_edit_self($pdo, (int) $meAdmin['id'], (string) ($b['name'] ?? ''), (string) ($b['email'] ?? ''), (string) ($b['new_password'] ?? ''), (string) ($b['security_password'] ?? ''));
+        if ($m !== '') fail($m, 403);
+        out(['success' => true]);
+
+    case 'team_set_security':
+        $m = team_set_security($pdo, (int) $meAdmin['id'], (string) ($b['proof'] ?? ''), (string) ($b['new'] ?? ''));
+        if ($m !== '') fail($m, 403);
+        out(['success' => true]);
+
+    case 'team_add':
+        $m = team_add($pdo, (int) $meAdmin['id'], (string) ($b['name'] ?? ''), (string) ($b['email'] ?? ''), (string) ($b['password'] ?? ''), (string) ($b['security_password'] ?? ''));
+        if ($m !== '') fail($m, 403);
+        out(['success' => true]);
+
+    case 'team_do':
+        $m = team_do($pdo, (int) $meAdmin['id'], (int) ($b['id'] ?? 0), (string) ($b['do'] ?? ''), (string) ($b['security_password'] ?? ''));
+        if ($m !== '') fail($m, 403);
         out(['success' => true]);
 
     case 'user_save':

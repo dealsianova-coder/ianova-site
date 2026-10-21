@@ -42,6 +42,8 @@ function auth_login_page(PDO $pdo, string $kind): void {
                 auth_record($pdo, $kind, $email);
                 $error = 'Incorrect email or password.';
                 if (auth_locked($pdo, $kind, $email)) $error = auth_lock_message(auth_locked($pdo, $kind, $email));
+            } elseif ($kind === 'admin' && (include_once __DIR__ . '/admin_team.php') && ($error = team_login_block($pdo, $a)) !== '') {
+                // pending or suspended admin: message set above
             } elseif ($kind === 'seller' && in_array($a['status'], ['pending', 'suspended', 'rejected'], true)) {
                 $msgs = ['pending' => 'Your application is still under review. We will email you once approved.', 'suspended' => 'Your seller account has been suspended. Contact support for more information.', 'rejected' => 'Your seller application was not approved.'];
                 $error = $msgs[$a['status']];
