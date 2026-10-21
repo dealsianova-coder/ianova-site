@@ -58,7 +58,7 @@ if (!$groups['0']['lines']) unset($groups['0']);
   </div>
   <div class="ol" style="min-width:0">
   <?php foreach ($g['lines'] as $l): $opt = trim($l['color'] . ' ' . $l['size']); $pid = (int) ($l['product_id'] ?? 0); ?>
-    <a href="<?= $pid ? 'product_view.php?id=' . $pid : '#' ?>" style="justify-content:space-between;border-bottom:1px solid #e8eeea;padding-bottom:8px">
+    <a href="<?= $pid ? 'order_item.php?id=' . (int) $o['id'] . '&p=' . $pid . '&tab=' . $tab . '&c=' . urlencode((string) ($l['color'] ?? '')) . '&s=' . urlencode((string) ($l['size'] ?? '')) : '#' ?>" style="justify-content:space-between;border-bottom:1px solid #e8eeea;padding-bottom:8px">
       <span style="display:flex;align-items:center;gap:10px"><?= aou_thumb($l['image'] ?? '', $l['emoji'] ?? '', $l['bg_color'] ?? '', 56) ?>
         <span><b><?= admin_h($l['name'] ?? 'Deleted product') ?></b><small><?= (int) $l['quantity'] ?> × <?= CURRENCY . number_format((float) $l['unit_price'], 2) ?><?= $opt !== '' ? ' · ' . admin_h($opt) : '' ?></small></span></span>
       <b><?= CURRENCY . number_format((float) $l['unit_price'] * (int) $l['quantity'], 2) ?></b>
