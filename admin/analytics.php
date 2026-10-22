@@ -82,4 +82,7 @@ $pts = []; foreach ($d['sales'] as $i => $s) $pts[] = round($px($i), 1) . ',' . 
     <a class="an-top an-link" href="product_view.php?id=<?= (int) $t['id'] ?>" style="--ac:<?= $tcol[$i % 5] ?>"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:5px"><strong><?= admin_h($t['name']) ?></strong><span class="muted"><?= (int) $t['sold'] ?> sold</span></div><div class="an-bar"><i style="width:<?= round($t['sold'] / $topMax * 100) ?>%"></i></div></a>
   <?php endforeach; if (!$d['top']): ?><p class="muted">No sales yet.</p><?php endif; ?></div>
 </div>
+<div class="card an-sec" style="--ac:#17a2a2;margin-top:16px"><div class="an-h"><h3>⬇️ Export orders (CSV)</h3></div>
+<form method="get" action="export_orders.php" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end"><div class="field" style="margin:0"><label>From</label><input type="date" name="from" value="<?= date('Y-m-d', strtotime('-30 days')) ?>"></div><div class="field" style="margin:0"><label>To</label><input type="date" name="to" value="<?= date('Y-m-d') ?>"></div><button class="btn">Download CSV</button></form>
+<p class="muted" style="margin:8px 0 0">Opens in Excel or Google Sheets: order, date, status, total, customer, phone, address and items.</p></div>
 <?php require 'includes/footer.php';

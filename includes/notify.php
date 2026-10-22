@@ -82,11 +82,16 @@ function notify_deliver(PDO $pdo, int $limit = 6): int {
     notify_ensure($pdo);
     if (!defined('SMTP_PASS') || SMTP_PASS === '') return 0; // not set up yet: keep everything queued
     if (!function_exists('send_mail')) require_once __DIR__ . '/mailer.php';
-    $pdo->exec("DELETE FROM notify_outbox WHERE sent_at IS NULL AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)");
+    $pdo->exec("DELETE FROM notify_outbox WHERE sent_at IS NULL AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)");
     $lock = (int) $pdo->query("SELECT GET_LOCK('ianova_notify_send', 0)")->fetchColumn();
     if ($lock !== 1) return 0;
     $sent = 0;
     try {
+        // Gmail blocks accounts that send too much: stay under a daily cap (MAIL_DAILY_CAP in config.local.php, default 450). The rest waits for tomorrow.
+        $cap = defined('MAIL_DAILY_CAP') ? max(1, (int) MAIL_DAILY_CAP) : 450;
+        $today = (int) $pdo->query('SELECT COUNT(*) FROM notify_outbox WHERE sent_at >= CURDATE()')->fetchColumn();
+        if ($today >= $cap) return 0;
+        $limit = min($limit, $cap - $today);
         $rows = $pdo->query('SELECT id, to_email, to_name, subject, html FROM notify_outbox WHERE sent_at IS NULL AND tries < 3 ORDER BY id LIMIT ' . max(1, $limit))->fetchAll();
         foreach ($rows as $r) {
             $ok = false;
@@ -284,6 +289,28 @@ function notify_scan(PDO $pdo): void {
             if ($top > $cur) ops_setting_set($pdo, 'mail_c_sub', (string) $top);
         } catch (Throwable $e) {
         }
+    }
+
+    // 6. low stock: one email to the admin when products run low or out (once per product until restocked)
+    try {
+        $thr = 3;
+        $rows = $pdo->query("SELECT p.id, p.name, p.stock, s.val AS seen FROM products p LEFT JOIN notify_seen s ON s.kind = 's' AND s.ref = p.id WHERE p.status = 'approved' AND p.stock <= $thr ORDER BY p.id LIMIT 100")->fetchAll();
+        $fresh = []; $keys = [];
+        foreach ($rows as $r) {
+            $bucket = (int) $r['stock'] <= 0 ? 'out' : 'low';
+            if ($r['seen'] === $bucket) continue;
+            $pdo->prepare("INSERT INTO notify_seen (kind, ref, val) VALUES ('s', ?, ?) ON DUPLICATE KEY UPDATE val = VALUES(val)")->execute([$r['id'], $bucket]);
+            $fresh[] = $r; $keys[] = $r['id'] . ':' . $bucket;
+        }
+        $pdo->exec("DELETE s FROM notify_seen s JOIN products p ON p.id = s.ref WHERE s.kind = 's' AND p.stock > $thr");
+        if ($fresh) {
+            $li = '';
+            foreach ($fresh as $r) $li .= '<li>' . notify_esc($r['name']) . ' — <strong>' . ((int) $r['stock'] <= 0 ? 'out of stock' : (int) $r['stock'] . ' left') . '</strong></li>';
+            notify_queue($pdo, 'stock_low:' . md5(implode(',', $keys)), 'admin', notify_admin_address($pdo), 'Admin',
+                count($fresh) . ' product(s) running low on stock',
+                notify_wrap('Low stock', '<ul>' . $li . '</ul><p>Open Admin, then Products, to restock them.</p>'));
+        }
+    } catch (Throwable $e) {
     }
 }
 

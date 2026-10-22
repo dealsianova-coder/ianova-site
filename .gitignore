@@ -4,3 +4,5 @@ uploads/
 *.mine
 *.log
 ianova-backup-*
+*.sql.gz
+ianova-backups/

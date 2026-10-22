@@ -12,6 +12,8 @@ function team_ensure(PDO $pdo): void {
         $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS security_hash VARCHAR(255) NULL");
         $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS added_by INT NULL");
         $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS perms TEXT NULL");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS admin_log (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, admin_name VARCHAR(120) NOT NULL DEFAULT '', action VARCHAR(60) NOT NULL, detail VARCHAR(300) NOT NULL DEFAULT '', ip VARCHAR(45) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (created_at), KEY (admin_id)) ENGINE=InnoDB");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS admin_sec_reset (admin_id INT PRIMARY KEY, token_hash CHAR(64) NOT NULL, expires_at DATETIME NOT NULL, requested_at DATETIME NOT NULL) ENGINE=InnoDB");
         $pdo->exec("CREATE TABLE IF NOT EXISTS admin_sec_fail (admin_id INT PRIMARY KEY, fails INT NOT NULL DEFAULT 0, until_at DATETIME NULL) ENGINE=InnoDB");
         if (!(int) $pdo->query('SELECT COUNT(*) FROM admins WHERE is_master = 1')->fetchColumn()) {
             $pdo->exec('UPDATE admins SET is_master = 1 WHERE id = (SELECT m FROM (SELECT MIN(id) m FROM admins) x)');
@@ -75,6 +77,7 @@ function team_set_security(PDO $pdo, int $id, string $proof, string $new): strin
     }
     if (password_verify($new, (string) $r['password_hash'])) return 'The security password must be different from your sign-in password.';
     $pdo->prepare('UPDATE admins SET security_hash = ? WHERE id = ?')->execute([password_hash($new, PASSWORD_DEFAULT), $id]);
+    team_log($pdo, $id, 'security_password_set', '');
     return '';
 }
 
@@ -85,7 +88,7 @@ function team_email_taken(PDO $pdo, string $email, int $exceptAdmin = 0): bool {
 }
 
 /** Edit your own admin account. '' = saved. */
-function team_edit_self(PDO $pdo, int $id, string $name, string $email, string $newLoginPw, string $security): string {
+function team_edit_self(PDO $pdo, int $id, string $name, string $email, string $newLoginPw, string $security, string $keepTokenHash = ''): string {
     $m = team_verify($pdo, $id, $security);
     if ($m !== '') return $m;
     $email = strtolower(trim($email)); $name = trim($name);
@@ -93,7 +96,12 @@ function team_edit_self(PDO $pdo, int $id, string $name, string $email, string $
     if ($newLoginPw !== '' && strlen($newLoginPw) < 8) return 'The new sign-in password must be at least 8 characters.';
     if (team_email_taken($pdo, $email, $id)) return 'That email is already used by another account. The admin email must be unique.';
     $pdo->prepare('UPDATE admins SET name = ?, email = ? WHERE id = ?')->execute([$name, $email, $id]);
-    if ($newLoginPw !== '') $pdo->prepare('UPDATE admins SET password_hash = ? WHERE id = ?')->execute([password_hash($newLoginPw, PASSWORD_DEFAULT), $id]);
+    if ($newLoginPw !== '') {
+        $pdo->prepare('UPDATE admins SET password_hash = ? WHERE id = ?')->execute([password_hash($newLoginPw, PASSWORD_DEFAULT), $id]);
+        // sign out every other app session of this admin (the one making the change stays)
+        try { $pdo->prepare('DELETE FROM admin_tokens WHERE admin_id = ? AND token_hash <> ?')->execute([$id, $keepTokenHash]); } catch (Throwable $e) {}
+    }
+    team_log($pdo, $id, 'account_edit', $newLoginPw !== '' ? 'name/email and sign-in password' : 'name/email');
     return '';
 }
 
@@ -108,6 +116,7 @@ function team_add(PDO $pdo, int $masterId, string $name, string $email, string $
     if (team_email_taken($pdo, $email)) return 'That email is already used by another account.';
     $pdo->prepare("INSERT INTO admins (name, email, password_hash, status, is_master, added_by, perms) VALUES (?, ?, ?, 'pending', 0, ?, ?)")
         ->execute([$name, $email, password_hash($loginPw, PASSWORD_DEFAULT), $masterId, team_clean_perms($perms)]);
+    team_log($pdo, $masterId, 'admin_add', $email . ' (pending)');
     return '';
 }
 
@@ -120,6 +129,13 @@ function team_do(PDO $pdo, int $masterId, int $id, string $do, string $security)
     $s = $pdo->prepare('SELECT status, is_master FROM admins WHERE id = ?'); $s->execute([$id]);
     $r = $s->fetch(PDO::FETCH_ASSOC);
     if (!$r || (int) $r['is_master'] === 1) return 'Admin not found.';
+    team_log($pdo, $masterId, 'admin_' . $do, '#' . $id);
+    if ($do === 'make_master') {
+        if ($r['status'] !== 'active') return 'Only an active admin can become the master admin.';
+        $pdo->prepare('UPDATE admins SET is_master = 0 WHERE id = ?')->execute([$masterId]);
+        $pdo->prepare('UPDATE admins SET is_master = 1, perms = NULL WHERE id = ?')->execute([$id]);
+        return '';
+    }
     $kill = fn() => $pdo->prepare('DELETE FROM admin_tokens WHERE admin_id = ?')->execute([$id]);
     if ($do === 'approve' || $do === 'restore') { $pdo->prepare("UPDATE admins SET status = 'active' WHERE id = ?")->execute([$id]); return ''; }
     if ($do === 'suspend') { $pdo->prepare("UPDATE admins SET status = 'suspended' WHERE id = ?")->execute([$id]); try { $kill(); } catch (Throwable $e) {} return ''; }
@@ -142,7 +158,7 @@ function team_sections(): array {
         'analytics' => ['📈 Analytics', ['analytics.php']],
         'products' => ['📦 Products', ['products.php', 'product_view.php', 'product_edit.php', 'product_approve.php', 'product_delete.php', 'product_hide.php', 'product_unhide.php', 'products_bulk.php', 'products_bulk_template.php']],
         'categories' => ['🏷️ Categories', ['categories.php']],
-        'orders' => ['🛒 Orders', ['orders.php', 'order_view.php']],
+        'orders' => ['🛒 Orders', ['orders.php', 'order_view.php', 'order_item.php', 'order_note.php', 'invoice.php', 'export_orders.php']],
         'users' => ['👥 Users (sellers & customers)', ['users.php']],
         'sellers' => ['🏪 Sellers', ['sellers.php', 'seller_messages.php']],
         'broadcast' => ['📢 Broadcast', ['broadcast.php']],
@@ -193,6 +209,7 @@ function team_set_perms(PDO $pdo, int $masterId, int $id, array $perms, string $
     $r = $s->fetch(PDO::FETCH_ASSOC);
     if (!$r || (int) $r['is_master'] === 1 || $id === $masterId) return 'Admin not found.';
     $pdo->prepare('UPDATE admins SET perms = ? WHERE id = ?')->execute([team_clean_perms($perms), $id]);
+    team_log($pdo, $masterId, 'admin_access', '#' . $id . ': ' . team_clean_perms($perms));
     return '';
 }
 
@@ -204,7 +221,7 @@ function team_section_of_action(string $file, string $a): ?string {
         if (isset($m[$a])) return $m[$a];
         return strpos($a, 'seller_') === 0 ? 'sellers' : null;
     }
-    $exact = ['dashboard' => 'dashboard', 'analytics' => 'analytics', 'orders_list' => 'orders', 'order_view' => 'orders', 'bulk_import' => 'products',
+    $exact = ['dashboard' => 'dashboard', 'analytics' => 'analytics', 'orders_list' => 'orders', 'order_view' => 'orders', 'order_notes' => 'orders', 'order_note_add' => 'orders', 'bulk_import' => 'products',
         'users_list' => 'users', 'user_save' => 'users', 'user_delete' => 'users', 'sellers_full' => 'sellers', 'seller_action' => 'sellers', 'auto_master' => 'sellers',
         'subscribers_list' => 'subscribers', 'subscriber_delete' => 'subscribers', 'suggestions_list' => 'suggestions', 'suggestion_reviewed' => 'suggestions',
         'alerts_tab' => 'alerts', 'alerts_tab_read' => 'alerts', 'settings_get' => 'settings', 'settings_set' => 'settings'];
@@ -221,6 +238,11 @@ function team_page_guard(PDO $pdo, int $id): void {
     $allowed = team_allowed_for($pdo, $id);
     $page = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
     $hide = [];
+    if (!team_is_master($pdo, $id)) { $hide[] = preg_quote('activity.php', '~'); if ($page === 'activity.php') { http_response_code(403); exit('Only the master admin can see the activity log.'); } }
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && !in_array($page, ['logout.php', 'login.php'], true)) {
+        $d = []; foreach (['kind', 'do', 'id', 'status', 'order_id', 'action'] as $k) if (isset($_POST[$k]) && is_scalar($_POST[$k])) $d[] = $k . '=' . substr((string) $_POST[$k], 0, 40);
+        team_log($pdo, $id, 'web:' . $page, implode(' ', $d));
+    }
     foreach (team_sections() as $key => $def) {
         foreach ($def[1] as $f) {
             if (!in_array($key, $allowed, true)) { $hide[] = preg_quote($f, '~'); if ($f === $page) $block = $key; }
@@ -239,4 +261,61 @@ function team_page_guard(PDO $pdo, int $id): void {
         $re = '~<a\b[^>]*href="(?:' . implode('|', $hide) . ')(?:\?[^"]*)?"[^>]*>.*?</a>~is';
         ob_start(function ($html) use ($re) { return preg_replace($re, '', $html) ?? $html; });
     }
+}
+
+// ---------------------------------------------------------------- activity log
+function team_log(PDO $pdo, int $adminId, string $action, string $detail = ''): void {
+    try {
+        team_ensure($pdo);
+        $n = $pdo->prepare('SELECT name FROM admins WHERE id = ?'); $n->execute([$adminId]);
+        $pdo->prepare('INSERT INTO admin_log (admin_id, admin_name, action, detail, ip) VALUES (?, ?, ?, ?, ?)')
+            ->execute([$adminId, (string) $n->fetchColumn(), substr($action, 0, 60), substr($detail, 0, 300), substr((string) ($_SERVER['REMOTE_ADDR'] ?? 'cli'), 0, 45)]);
+        $pdo->exec("DELETE FROM admin_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 180 DAY)");
+    } catch (Throwable $e) { /* logging must never break the request */ }
+}
+
+function team_log_list(PDO $pdo, int $limit = 200, int $adminId = 0): array {
+    team_ensure($pdo);
+    $sql = 'SELECT id, admin_id, admin_name, action, detail, ip, created_at FROM admin_log' . ($adminId > 0 ? ' WHERE admin_id = ' . (int) $adminId : '') . ' ORDER BY id DESC LIMIT ' . max(1, min(500, $limit));
+    return $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// ---------------------------------------------------------------- forgot the security password
+/** Emails a one-time link (valid 30 minutes) to the signed-in admin's own address. '' = sent. */
+function team_sec_reset_request(PDO $pdo, int $id): string {
+    team_ensure($pdo);
+    $a = $pdo->prepare('SELECT name, email FROM admins WHERE id = ?'); $a->execute([$id]);
+    $row = $a->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return 'Admin not found.';
+    $recent = $pdo->prepare('SELECT COUNT(*) FROM admin_sec_reset WHERE admin_id = ? AND requested_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)'); $recent->execute([$id]);
+    if ((int) $recent->fetchColumn() > 0) return 'A reset email was just sent. Check your inbox, or wait 5 minutes to ask again.';
+    $token = bin2hex(random_bytes(24));
+    $pdo->prepare('REPLACE INTO admin_sec_reset (admin_id, token_hash, expires_at, requested_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE), NOW())')->execute([$id, hash('sha256', $token)]);
+    $base = defined('SITE_URL') && SITE_URL !== '' ? rtrim(SITE_URL, '/') : ((isset($_SERVER['HTTP_HOST']) ? ((!empty($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST']) : ''));
+    $link = $base . '/admin/security_reset.php?t=' . $token;
+    require_once __DIR__ . '/notify.php';
+    $html = notify_wrap('Reset your security password', '<p>Someone (hopefully you) asked to reset the <strong>security password</strong> of this admin account.</p><p><a href="' . notify_esc($link) . '" style="background:#1d6b52;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:bold;display:inline-block">Set a new security password</a></p><p style="color:#666;font-size:13px">The link works for 30 minutes and only while you are signed in to the admin. If this was not you, ignore this email: nothing changes.</p>');
+    if (!function_exists('send_mail')) require_once __DIR__ . '/mailer.php';
+    $ok = false; try { $ok = (bool) send_mail($row['email'], $row['name'], 'Reset your admin security password', $html); } catch (Throwable $e) {}
+    if (!$ok) return 'The email could not be sent. Check Email alerts, or ask the server owner to run tools/reset_security.php.';
+    team_log($pdo, $id, 'security_reset_requested', '');
+    return '';
+}
+
+/** Applies the emailed link. Needs the sign-in password as well. '' = done. */
+function team_sec_reset_apply(PDO $pdo, int $id, string $token, string $loginPw, string $new): string {
+    team_ensure($pdo);
+    if (strlen($new) < 8) return 'The security password must be at least 8 characters.';
+    $q = $pdo->prepare('SELECT token_hash FROM admin_sec_reset WHERE admin_id = ? AND expires_at > NOW()'); $q->execute([$id]);
+    $hash = (string) $q->fetchColumn();
+    if ($hash === '' || !hash_equals($hash, hash('sha256', $token))) return 'This reset link is invalid or has expired. Ask for a new one.';
+    $s = $pdo->prepare('SELECT password_hash FROM admins WHERE id = ?'); $s->execute([$id]);
+    $ph = (string) $s->fetchColumn();
+    if ($loginPw === '' || !password_verify($loginPw, $ph)) { usleep(700000); return 'Enter your sign-in password to confirm it is you.'; }
+    if (password_verify($new, $ph)) return 'The security password must be different from your sign-in password.';
+    $pdo->prepare('UPDATE admins SET security_hash = ? WHERE id = ?')->execute([password_hash($new, PASSWORD_DEFAULT), $id]);
+    $pdo->prepare('DELETE FROM admin_sec_reset WHERE admin_id = ?')->execute([$id]);
+    $pdo->prepare('DELETE FROM admin_sec_fail WHERE admin_id = ?')->execute([$id]);
+    team_log($pdo, $id, 'security_password_reset', 'via email link');
+    return '';
 }

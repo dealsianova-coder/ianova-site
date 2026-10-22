@@ -68,6 +68,7 @@ if (!$groups['0']['lines']) unset($groups['0']);
 </div>
 <?php endforeach; ?>
 <?php if (!$groups): ?><div class="card muted">This order has no items.</div><?php endif; ?>
+<?php require_once __DIR__ . '/../includes/admin_order_extras.php'; admin_order_extras($pdo, $o); ?>
 <div class="card" style="margin-top:16px;max-width:360px;margin-left:auto">
   <div style="display:flex;justify-content:space-between"><span class="muted">Items</span><span><?= CURRENCY . number_format($sub, 2) ?></span></div>
   <?php if (abs($delivery) > 0.004): ?><div style="display:flex;justify-content:space-between;margin-top:6px"><span class="muted">Delivery / other</span><span><?= CURRENCY . number_format($delivery, 2) ?></span></div><?php endif; ?>

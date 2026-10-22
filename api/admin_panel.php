@@ -103,6 +103,11 @@ $img = image_column($pdo);
 $__sec = team_section_of_action('panel', (string) $action);
 if ($__sec !== null && !team_can($pdo, (int) $meAdmin['id'], $__sec)) fail('You do not have access to this section. Ask the master admin.', 403);
 
+if (preg_match('/(_save|_delete|_action|_toggle|_status|_set|_send|_import|_flush|_clear|_add|_do|_perms|_reviewed|_read)$|^(auto_master|bulk_import|mail_test|mail_newsletter|order_note_add)$/', (string) $action) && !in_array($action, ['alerts_tab_read', 'team_do', 'team_add', 'team_perms', 'team_set_security', 'admin_account_save'], true)) {
+    $__d = []; foreach (['id', 'status', 'do', 'name', 'key'] as $__k) if (isset($b[$__k]) && is_scalar($b[$__k])) $__d[] = $__k . '=' . substr((string) $b[$__k], 0, 40);
+    team_log($pdo, (int) $meAdmin['id'], (string) $action, implode(' ', $__d));
+}
+
 switch ($action) {
 
     // ============================== DASHBOARD ==============================
@@ -168,7 +173,7 @@ switch ($action) {
             'recent_products' => $recent, 'low_items' => $low, 'categories' => $cats, 'sellers' => $sellers, 'users' => $users]);
 
     case 'nav_counts':
-        out(['success' => true,
+        $nc = ['success' => true,
             'alerts' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM admin_notifications WHERE read_at IS NULL'),
             'messages' => (int) apx_val($pdo, "SELECT COUNT(*) FROM seller_messages WHERE sender = 'seller' AND read_at IS NULL AND body NOT LIKE 'Review request:%'"),
             'suggestions' => (int) apx_val($pdo, "SELECT COUNT(*) FROM suggestions WHERE status = 'new'"),
@@ -177,7 +182,12 @@ switch ($action) {
             'pending_sellers' => (int) apx_val($pdo, "SELECT COUNT(*) FROM sellers WHERE status = 'pending'"),
             'master' => team_is_master($pdo, (int) $meAdmin['id']),
             'allowed' => team_allowed_for($pdo, (int) $meAdmin['id']),
-        ]);
+        ];
+        $__al = team_allowed_for($pdo, (int) $meAdmin['id']);
+        foreach (['alerts' => 'alerts', 'messages' => 'sellers', 'suggestions' => 'suggestions', 'pending_orders' => 'orders', 'review_products' => 'products', 'pending_sellers' => 'sellers'] as $__k => $__sec) {
+            if (!in_array($__sec, $__al, true)) $nc[$__k] = 0;
+        }
+        out($nc);
 
     // ============================== ORDERS ==============================
     case 'orders_list':
@@ -242,7 +252,8 @@ switch ($action) {
         foreach ($groups as $g) { $g['total'] = aou_lines_total($g['lines']); $out[] = $g; }
         out(['success' => true, 'order' => ['id' => (int) $o['id'], 'status' => $o['status'], 'created_at' => $o['created_at'], 'customer' => $o['customer'], 'email' => (string) $o['email'],
             'phone' => (string) ($o['guest_phone'] ?? ''), 'address' => (string) ($o['address'] ?? ''), 'total' => (float) $o['total']],
-            'groups' => $out, 'subtotal' => $sub, 'delivery' => round((float) $o['total'] - $sub, 2)]);
+            'groups' => $out, 'subtotal' => $sub, 'delivery' => round((float) $o['total'] - $sub, 2),
+            'notes' => apx_rows($pdo, 'SELECT id, admin_name, note, created_at FROM order_notes WHERE order_id = ? ORDER BY id DESC', [$id])]);
 
     // ============================== PRODUCTS ==============================
     case 'products_list':
@@ -422,6 +433,28 @@ switch ($action) {
         $secs = []; foreach (team_sections() as $k => $d) $secs[] = ['key' => $k, 'label' => $d[0]];
         out(['success' => true, 'me' => $meId, 'master' => $isM, 'has_security' => team_has_security($pdo, $meId), 'admins' => $rows, 'sections' => $secs]);
 
+    case 'team_sec_reset_request':
+        $m = team_sec_reset_request($pdo, (int) $meAdmin['id']);
+        if ($m !== '') fail($m, 429);
+        out(['success' => true]);
+
+    case 'activity_list':
+        if (!team_is_master($pdo, (int) $meAdmin['id'])) fail('Only the master admin can see the activity log.', 403);
+        out(['success' => true, 'rows' => team_log_list($pdo, (int) ($_GET['limit'] ?? 200), (int) ($_GET['admin'] ?? 0))]);
+
+    case 'order_notes':
+        $oid = (int) ($_GET['id'] ?? $b['id'] ?? 0);
+        $pdo->exec("CREATE TABLE IF NOT EXISTS order_notes (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, admin_id INT NOT NULL, admin_name VARCHAR(120) NOT NULL DEFAULT '', note TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (order_id)) ENGINE=InnoDB");
+        out(['success' => true, 'notes' => apx_rows($pdo, 'SELECT id, admin_name, note, created_at FROM order_notes WHERE order_id = ? ORDER BY id DESC', [$oid])]);
+
+    case 'order_note_add':
+        $oid = (int) ($b['id'] ?? 0);
+        $note = trim((string) ($b['note'] ?? ''));
+        if ($oid < 1 || $note === '') fail('Write a note first.');
+        $pdo->exec("CREATE TABLE IF NOT EXISTS order_notes (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, admin_id INT NOT NULL, admin_name VARCHAR(120) NOT NULL DEFAULT '', note TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (order_id)) ENGINE=InnoDB");
+        $pdo->prepare('INSERT INTO order_notes (order_id, admin_id, admin_name, note) SELECT ?, id, name, ? FROM admins WHERE id = ?')->execute([$oid, mb_substr($note, 0, 1000), (int) $meAdmin['id']]);
+        out(['success' => true]);
+
     case 'team_perms':
         $perms = $b['perms'] ?? [];
         $m = team_set_perms($pdo, (int) $meAdmin['id'], (int) ($b['id'] ?? 0), is_array($perms) ? $perms : [], (string) ($b['security_password'] ?? ''));
@@ -431,7 +464,7 @@ switch ($action) {
     case 'admin_account_save':
         // Editing your own admin account needs the security password (separate from the sign-in password).
         if ((int) ($b['id'] ?? 0) !== (int) $meAdmin['id']) fail('The admin account is protected. You can only edit your own admin account.', 403);
-        $m = team_edit_self($pdo, (int) $meAdmin['id'], (string) ($b['name'] ?? ''), (string) ($b['email'] ?? ''), (string) ($b['new_password'] ?? ''), (string) ($b['security_password'] ?? ''));
+        $m = team_edit_self($pdo, (int) $meAdmin['id'], (string) ($b['name'] ?? ''), (string) ($b['email'] ?? ''), (string) ($b['new_password'] ?? ''), (string) ($b['security_password'] ?? ''), hash('sha256', $token));
         if ($m !== '') fail($m, 403);
         out(['success' => true]);
 

@@ -33,6 +33,7 @@ $__adm = $s->fetch();
 if (!$__adm) fail('Admin session expired. Please sign in again.', 401);
 require_once __DIR__ . '/../includes/admin_team.php';
 $__sec = team_section_of_action('admin', (string) $action);
+if (in_array($action, ['order_status', 'store_set', 'seller_set_status', 'seller_reply', 'broadcast_send', 'product_update'], true)) team_log($pdo, (int) $__adm['id'], (string) $action, 'id=' . (int) ($b['id'] ?? $b['order_id'] ?? 0));
 if ($__sec !== null && !team_can($pdo, (int) $__adm['id'], $__sec)) fail('You do not have access to this section. Ask the master admin.', 403);
 
 function put_setting(PDO $pdo, string $key, string $value): void {

@@ -18,6 +18,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($kind === 'sec') {
         $m = team_set_security($pdo, $meId, (string) ($_POST['proof'] ?? ''), (string) ($_POST['new'] ?? ''));
         if ($m === '') $notice = 'Security password saved.'; else $error = $m;
+    } elseif ($kind === 'sec_forgot') {
+        $m = team_sec_reset_request($pdo, $meId);
+        if ($m === '') $notice = 'We emailed you a link to set a new security password. It works for 30 minutes.'; else $error = $m;
     } elseif ($kind === 'team_add') {
         $m = team_add($pdo, $meId, (string) ($_POST['name'] ?? ''), (string) ($_POST['email'] ?? ''), (string) ($_POST['password'] ?? ''), $sec, $permsIn());
         if ($m === '') $notice = 'Admin added. They can sign in once you approve them.'; else $error = $m;
@@ -86,7 +89,7 @@ if ($notice): ?><div class="notice"><?= admin_h($notice) ?></div><?php endif; if
       <div class="tm-acts">
       <?php if ($a['status'] === 'pending'): ?><button class="btn" name="do" value="approve">✅ Approve</button><button class="btn red" name="do" value="reject" onclick="return confirm('Reject and delete this admin request?')">Reject</button>
       <?php elseif ($a['status'] === 'suspended'): ?><button class="btn" name="do" value="restore">Restore</button><button class="btn red" name="do" value="remove" onclick="return confirm('Remove this admin?')">Remove</button>
-      <?php else: ?><button class="btn gray" name="do" value="suspend">Suspend</button><button class="btn red" name="do" value="remove" onclick="return confirm('Remove this admin?')">Remove</button><?php endif; ?>
+      <?php else: ?><button class="btn gray" name="do" value="make_master" onclick="return confirm('Make this admin the master admin? You will become a normal admin.')">Make master</button><button class="btn gray" name="do" value="suspend">Suspend</button><button class="btn red" name="do" value="remove" onclick="return confirm('Remove this admin?')">Remove</button><?php endif; ?>
       </div></form>
   <?php else: ?><div style="font-size:12px;opacity:.75">🔒 Protected: only this admin can edit this account.</div><?php endif; ?>
 </div>
@@ -98,7 +101,8 @@ if ($notice): ?><div class="notice"><?= admin_h($notice) ?></div><?php endif; if
   <form method="post" class="f" style="display:grid;gap:10px;max-width:640px"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>"><input type="hidden" name="kind" value="sec">
     <input type="password" name="proof" required autocomplete="off" placeholder="<?= $iHaveSec ? 'Current security password' : 'Your sign-in password (to confirm it is you)' ?>">
     <input type="password" name="new" required minlength="8" autocomplete="new-password" placeholder="<?= $iHaveSec ? 'New security password' : 'Choose a security password (8+ characters)' ?>">
-    <button class="btn"><?= $iHaveSec ? 'Change security password' : 'Set security password' ?></button></form></div>
+    <button class="btn"><?= $iHaveSec ? 'Change security password' : 'Set security password' ?></button></form>
+  <?php if ($iHaveSec): ?><form method="post" style="margin-top:10px"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>"><input type="hidden" name="kind" value="sec_forgot"><button class="btn gray">Forgot it? Email me a reset link</button></form><?php endif; ?></div>
 <?php if ($iAmMaster): ?>
 <div class="tm-panel" style="grid-column:1/-1"><strong>➕ Add another admin</strong>
   <p class="muted" style="margin:6px 0 10px">The new admin is created as <b>pending</b> and cannot sign in until you approve them. Give them their own sign-in password.</p>
