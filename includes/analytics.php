@@ -12,6 +12,7 @@ function analytics_data(PDO $pdo, int $months = 6): array {
     $ok = "status <> 'cancelled'";
 
     $rev = (float) $one("SELECT COALESCE(SUM(total),0) FROM orders WHERE $ok");
+    $rev -= (float) $one('SELECT COALESCE(SUM(amount),0) FROM order_refunds'); // refunds paid back to customers
     $rev30 = (float) $one("SELECT COALESCE(SUM(total),0) FROM orders WHERE $ok AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)");
     $revPrev = (float) $one("SELECT COALESCE(SUM(total),0) FROM orders WHERE $ok AND created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)");
     $ord = (int) $one('SELECT COUNT(*) FROM orders');

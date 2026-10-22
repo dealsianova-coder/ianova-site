@@ -9,6 +9,8 @@ if (!$o) { http_response_code(404); exit('Order not found.'); }
 $lines = aou_items($pdo, [$id])[$id] ?? [];
 $sub = aou_lines_total($lines);
 $delivery = round((float) $o['total'] - $sub, 2);
+require_once __DIR__ . '/../includes/order_ops.php';
+$ex = oo_extras($pdo, $id);
 $m = fn($v) => CURRENCY . number_format((float) $v, 2);
 ?><!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Invoice #<?= (int) $o['id'] ?></title>
 <style>
@@ -33,6 +35,8 @@ table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#17352c;
   <?php endforeach; ?></table>
   <table class="tot"><tr><td></td><td class="r" style="width:180px">Items</td><td class="r" style="width:140px"><?= $m($sub) ?></td></tr>
   <?php if (abs($delivery) > 0.004): ?><tr><td></td><td class="r">Delivery / other</td><td class="r"><?= $m($delivery) ?></td></tr><?php endif; ?>
-  <tr class="grand"><td></td><td class="r">Total</td><td class="r"><?= $m($o['total']) ?></td></tr></table>
+  <tr class="grand"><td></td><td class="r">Total</td><td class="r"><?= $m($o['total']) ?></td></tr>
+  <?php if ($ex['refunded'] > 0): ?><tr><td></td><td class="r">Refunded</td><td class="r">− <?= $m($ex['refunded']) ?></td></tr><tr class="grand"><td></td><td class="r">Net paid</td><td class="r"><?= $m((float) $o['total'] - $ex['refunded']) ?></td></tr><?php endif; ?></table>
+  <?php if ($ex['tracking']['number'] !== '' || $ex['tracking']['courier'] !== ''): ?><p class="muted" style="margin-top:18px"><b>Delivery:</b> <?= admin_h($ex['tracking']['courier']) ?> <?= admin_h($ex['tracking']['number']) ?></p><?php endif; ?>
   <p class="muted" style="margin-top:28px;text-align:center">Thank you for shopping with <?= admin_h(SITE_NAME) ?>.</p>
 </div></body></html>

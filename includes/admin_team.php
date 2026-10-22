@@ -7,17 +7,22 @@ function team_ensure(PDO $pdo): void {
     if ($done) return;
     $done = true;
     try {
-        $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS status VARCHAR(12) NOT NULL DEFAULT 'active'");
-        $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_master TINYINT NOT NULL DEFAULT 0");
-        $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS security_hash VARCHAR(255) NULL");
-        $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS added_by INT NULL");
-        $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS perms TEXT NULL");
-        $pdo->exec("CREATE TABLE IF NOT EXISTS admin_log (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, admin_name VARCHAR(120) NOT NULL DEFAULT '', action VARCHAR(60) NOT NULL, detail VARCHAR(300) NOT NULL DEFAULT '', ip VARCHAR(45) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (created_at), KEY (admin_id)) ENGINE=InnoDB");
-        $pdo->exec("CREATE TABLE IF NOT EXISTS admin_sec_reset (admin_id INT PRIMARY KEY, token_hash CHAR(64) NOT NULL, expires_at DATETIME NOT NULL, requested_at DATETIME NOT NULL) ENGINE=InnoDB");
-        $pdo->exec("CREATE TABLE IF NOT EXISTS admin_sec_fail (admin_id INT PRIMARY KEY, fails INT NOT NULL DEFAULT 0, until_at DATETIME NULL) ENGINE=InnoDB");
+        // the table changes below only need to run once (remembered in ops_settings)
+        $have = function_exists('ops_setting') && ops_setting($pdo, 'schema_team', '') === '3';
+        if (!$have) {
+            $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS status VARCHAR(12) NOT NULL DEFAULT 'active'");
+            $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_master TINYINT NOT NULL DEFAULT 0");
+            $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS security_hash VARCHAR(255) NULL");
+            $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS added_by INT NULL");
+            $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS perms TEXT NULL");
+            $pdo->exec("CREATE TABLE IF NOT EXISTS admin_log (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, admin_name VARCHAR(120) NOT NULL DEFAULT '', action VARCHAR(60) NOT NULL, detail VARCHAR(300) NOT NULL DEFAULT '', ip VARCHAR(45) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (created_at), KEY (admin_id)) ENGINE=InnoDB");
+            $pdo->exec("CREATE TABLE IF NOT EXISTS admin_sec_reset (admin_id INT PRIMARY KEY, token_hash CHAR(64) NOT NULL, expires_at DATETIME NOT NULL, requested_at DATETIME NOT NULL) ENGINE=InnoDB");
+            $pdo->exec("CREATE TABLE IF NOT EXISTS admin_sec_fail (admin_id INT PRIMARY KEY, fails INT NOT NULL DEFAULT 0, until_at DATETIME NULL) ENGINE=InnoDB");
+        }
         if (!(int) $pdo->query('SELECT COUNT(*) FROM admins WHERE is_master = 1')->fetchColumn()) {
             $pdo->exec('UPDATE admins SET is_master = 1 WHERE id = (SELECT m FROM (SELECT MIN(id) m FROM admins) x)');
         }
+        if (!$have && function_exists('ops_setting_set')) ops_setting_set($pdo, 'schema_team', '3');
     } catch (Throwable $e) { /* older MariaDB: columns may already exist */ }
 }
 
@@ -145,7 +150,7 @@ function team_do(PDO $pdo, int $masterId, int $id, string $do, string $security)
 
 function team_list(PDO $pdo): array {
     team_ensure($pdo);
-    $rows = $pdo->query("SELECT id, name, email, last_login, created_at, status, is_master, perms, (security_hash IS NOT NULL AND security_hash <> '') has_security FROM admins ORDER BY is_master DESC, id")->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $pdo->query("SELECT id, name, email, last_login, created_at, status, is_master, perms, twofa, (security_hash IS NOT NULL AND security_hash <> '') has_security FROM admins ORDER BY is_master DESC, id")->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as &$r) { $r['allowed'] = team_allowed($r); unset($r['perms']); }
     return $rows;
 }
@@ -158,7 +163,7 @@ function team_sections(): array {
         'analytics' => ['📈 Analytics', ['analytics.php']],
         'products' => ['📦 Products', ['products.php', 'product_view.php', 'product_edit.php', 'product_approve.php', 'product_delete.php', 'product_hide.php', 'product_unhide.php', 'products_bulk.php', 'products_bulk_template.php']],
         'categories' => ['🏷️ Categories', ['categories.php']],
-        'orders' => ['🛒 Orders', ['orders.php', 'order_view.php', 'order_item.php', 'order_note.php', 'invoice.php', 'export_orders.php']],
+        'orders' => ['🛒 Orders', ['orders.php', 'order_view.php', 'order_item.php', 'order_note.php', 'order_ops.php', 'invoice.php', 'export_orders.php']],
         'users' => ['👥 Users (sellers & customers)', ['users.php']],
         'sellers' => ['🏪 Sellers', ['sellers.php', 'seller_messages.php']],
         'broadcast' => ['📢 Broadcast', ['broadcast.php']],
@@ -221,7 +226,7 @@ function team_section_of_action(string $file, string $a): ?string {
         if (isset($m[$a])) return $m[$a];
         return strpos($a, 'seller_') === 0 ? 'sellers' : null;
     }
-    $exact = ['dashboard' => 'dashboard', 'analytics' => 'analytics', 'orders_list' => 'orders', 'order_view' => 'orders', 'order_notes' => 'orders', 'order_note_add' => 'orders', 'bulk_import' => 'products',
+    $exact = ['dashboard' => 'dashboard', 'analytics' => 'analytics', 'orders_list' => 'orders', 'order_view' => 'orders', 'order_notes' => 'orders', 'order_note_add' => 'orders', 'order_tracking_save' => 'orders', 'order_refund_add' => 'orders', 'order_item_cancel' => 'orders', 'bulk_import' => 'products',
         'users_list' => 'users', 'user_save' => 'users', 'user_delete' => 'users', 'sellers_full' => 'sellers', 'seller_action' => 'sellers', 'auto_master' => 'sellers',
         'subscribers_list' => 'subscribers', 'subscriber_delete' => 'subscribers', 'suggestions_list' => 'suggestions', 'suggestion_reviewed' => 'suggestions',
         'alerts_tab' => 'alerts', 'alerts_tab_read' => 'alerts', 'settings_get' => 'settings', 'settings_set' => 'settings'];
@@ -318,4 +323,67 @@ function team_sec_reset_apply(PDO $pdo, int $id, string $token, string $loginPw,
     $pdo->prepare('DELETE FROM admin_sec_fail WHERE admin_id = ?')->execute([$id]);
     team_log($pdo, $id, 'security_password_reset', 'via email link');
     return '';
+}
+
+// ---------------------------------------------------------------- two-step sign-in (a code emailed to the admin)
+function team_twofa_on(PDO $pdo, int $id): bool {
+    team_ensure($pdo);
+    $s = $pdo->prepare('SELECT twofa FROM admins WHERE id = ?'); $s->execute([$id]);
+    return (int) $s->fetchColumn() === 1;
+}
+
+function team_twofa_set(PDO $pdo, int $id, bool $on, string $security): string {
+    $m = team_verify($pdo, $id, $security);
+    if ($m !== '') return $m;
+    $pdo->prepare('UPDATE admins SET twofa = ? WHERE id = ?')->execute([$on ? 1 : 0, $id]);
+    team_log($pdo, $id, $on ? 'twostep_on' : 'twostep_off', '');
+    return '';
+}
+
+function team_mask_email(string $e): string {
+    $p = explode('@', $e, 2);
+    return count($p) === 2 ? substr($p[0], 0, 1) . str_repeat('*', max(1, strlen($p[0]) - 1)) . '@' . $p[1] : $e;
+}
+
+/** Emails a 6-digit code (valid 10 minutes). Returns '' when sent; $challenge is for the app's second step. */
+function team_otp_start(PDO $pdo, int $id, &$challenge = null): string {
+    team_ensure($pdo);
+    $a = $pdo->prepare('SELECT name, email FROM admins WHERE id = ?'); $a->execute([$id]);
+    $row = $a->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return 'Admin not found.';
+    $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    $challenge = bin2hex(random_bytes(16));
+    $pdo->prepare('REPLACE INTO admin_otp (admin_id, code_hash, challenge_hash, expires_at, tries) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE), 0)')
+        ->execute([$id, hash('sha256', $code), hash('sha256', $challenge)]);
+    require_once __DIR__ . '/notify.php';
+    if (!function_exists('send_mail')) require_once __DIR__ . '/mailer.php';
+    $html = notify_wrap('Your sign-in code', '<p>Use this code to finish signing in to the admin:</p><p style="font-size:32px;letter-spacing:8px;font-weight:bold;margin:12px 0">' . $code . '</p><p style="color:#666;font-size:13px">It works for 10 minutes. If you did not just sign in, someone knows your password: change it now.</p>');
+    $ok = false; try { $ok = (bool) send_mail($row['email'], $row['name'], 'Your admin sign-in code', $html); } catch (Throwable $e) {}
+    if (!$ok) { $pdo->prepare('DELETE FROM admin_otp WHERE admin_id = ?')->execute([$id]); return 'Could not email your sign-in code. Try again, or ask the server owner to switch two-step sign-in off.'; }
+    return '';
+}
+
+/** '' = code correct (and used up). */
+function team_otp_check(PDO $pdo, int $id, string $code): string {
+    team_ensure($pdo);
+    $q = $pdo->prepare('SELECT code_hash, tries, expires_at > NOW() fresh FROM admin_otp WHERE admin_id = ?'); $q->execute([$id]);
+    $r = $q->fetch(PDO::FETCH_ASSOC);
+    if (!$r || (int) $r['fresh'] !== 1) return 'That code has expired. Sign in again to get a new one.';
+    if ((int) $r['tries'] >= 5) { $pdo->prepare('DELETE FROM admin_otp WHERE admin_id = ?')->execute([$id]); return 'Too many wrong codes. Sign in again to get a new one.'; }
+    $pdo->prepare('UPDATE admin_otp SET tries = tries + 1 WHERE admin_id = ?')->execute([$id]);
+    if (!hash_equals((string) $r['code_hash'], hash('sha256', preg_replace('/\D/', '', $code)))) { usleep(500000); return 'That code is not right.'; }
+    $pdo->prepare('DELETE FROM admin_otp WHERE admin_id = ?')->execute([$id]);
+    return '';
+}
+
+/** App second step: returns the admin row on success, or an error message string. */
+function team_otp_verify_challenge(PDO $pdo, string $challenge, string $code) {
+    team_ensure($pdo);
+    $q = $pdo->prepare('SELECT admin_id FROM admin_otp WHERE challenge_hash = ?'); $q->execute([hash('sha256', $challenge)]);
+    $id = (int) $q->fetchColumn();
+    if ($id < 1) return 'That sign-in has expired. Sign in again.';
+    $m = team_otp_check($pdo, $id, $code);
+    if ($m !== '') return $m;
+    $a = $pdo->prepare('SELECT id, name, email FROM admins WHERE id = ?'); $a->execute([$id]);
+    return $a->fetch(PDO::FETCH_ASSOC) ?: 'Admin not found.';
 }

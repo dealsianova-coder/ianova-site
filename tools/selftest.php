@@ -64,6 +64,17 @@ try {
     }
 }
 
+echo "== Order tools\n";
+require_once __DIR__ . '/../includes/order_ops.php';
+oo_ensure($pdo);
+$ocols = $pdo->query('SHOW COLUMNS FROM orders')->fetchAll(PDO::FETCH_COLUMN);
+t('orders.tracking_no column', in_array('tracking_no', $ocols, true));
+$hasRef = true; try { $pdo->query('SELECT 1 FROM order_refunds LIMIT 1'); } catch (Throwable $e) { $hasRef = false; }
+t('order_refunds table', $hasRef);
+t('refund / tracking / item-cancel need the Orders section', team_section_of_action('panel', 'order_refund_add') === 'orders' && team_section_of_action('panel', 'order_tracking_save') === 'orders' && team_section_of_action('panel', 'order_item_cancel') === 'orders');
+$pend = (int) $pdo->query("SELECT id FROM orders WHERE status = 'pending' ORDER BY id DESC LIMIT 1")->fetchColumn();
+if ($pend) t('refund refused on a pending order', oo_refund_add($pdo, 0, $pend, 1, 'test', 'test') !== ''); else skip('refund on pending order', 'no pending order');
+
 echo "== Cancelled orders\n";
 require_once __DIR__ . '/../includes/seller_orders.php';
 $cid = (int) $pdo->query("SELECT id FROM orders WHERE status = 'cancelled' ORDER BY id DESC LIMIT 1")->fetchColumn();

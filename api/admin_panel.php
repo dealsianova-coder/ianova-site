@@ -12,7 +12,9 @@ require_once __DIR__ . '/../includes/category_images.php';
 require_once __DIR__ . '/../includes/notify.php';
 require_once __DIR__ . '/../includes/analytics.php';
 require_once __DIR__ . '/../includes/admin_team.php';
+require_once __DIR__ . '/../includes/order_ops.php';
 team_ensure($pdo);
+oo_ensure($pdo);
 date_default_timezone_set('Africa/Nairobi');
 
 // ---- admin session (same tokens as api/admin.php) -------------------------------------------
@@ -103,7 +105,7 @@ $img = image_column($pdo);
 $__sec = team_section_of_action('panel', (string) $action);
 if ($__sec !== null && !team_can($pdo, (int) $meAdmin['id'], $__sec)) fail('You do not have access to this section. Ask the master admin.', 403);
 
-if (preg_match('/(_save|_delete|_action|_toggle|_status|_set|_send|_import|_flush|_clear|_add|_do|_perms|_reviewed|_read)$|^(auto_master|bulk_import|mail_test|mail_newsletter|order_note_add)$/', (string) $action) && !in_array($action, ['alerts_tab_read', 'team_do', 'team_add', 'team_perms', 'team_set_security', 'admin_account_save'], true)) {
+if (preg_match('/(_save|_delete|_action|_toggle|_status|_set|_send|_import|_flush|_clear|_add|_do|_perms|_reviewed|_read)$|^(auto_master|bulk_import|mail_test|mail_newsletter|order_note_add|order_item_cancel)$/', (string) $action) && !in_array($action, ['alerts_tab_read', 'team_do', 'team_add', 'team_perms', 'team_set_security', 'admin_account_save', 'order_tracking_save', 'order_refund_add', 'order_item_cancel'], true)) {
     $__d = []; foreach (['id', 'status', 'do', 'name', 'key'] as $__k) if (isset($b[$__k]) && is_scalar($b[$__k])) $__d[] = $__k . '=' . substr((string) $b[$__k], 0, 40);
     team_log($pdo, (int) $meAdmin['id'], (string) $action, implode(' ', $__d));
 }
@@ -250,7 +252,7 @@ switch ($action) {
         ksort($groups);
         $out = [];
         foreach ($groups as $g) { $g['total'] = aou_lines_total($g['lines']); $out[] = $g; }
-        out(['success' => true, 'order' => ['id' => (int) $o['id'], 'status' => $o['status'], 'created_at' => $o['created_at'], 'customer' => $o['customer'], 'email' => (string) $o['email'],
+        out(oo_extras($pdo, $id) + ['success' => true, 'order' => ['id' => (int) $o['id'], 'status' => $o['status'], 'created_at' => $o['created_at'], 'customer' => $o['customer'], 'email' => (string) $o['email'],
             'phone' => (string) ($o['guest_phone'] ?? ''), 'address' => (string) ($o['address'] ?? ''), 'total' => (float) $o['total']],
             'groups' => $out, 'subtotal' => $sub, 'delivery' => round((float) $o['total'] - $sub, 2),
             'notes' => apx_rows($pdo, 'SELECT id, admin_name, note, created_at FROM order_notes WHERE order_id = ? ORDER BY id DESC', [$id])]);
@@ -446,6 +448,21 @@ switch ($action) {
         $oid = (int) ($_GET['id'] ?? $b['id'] ?? 0);
         $pdo->exec("CREATE TABLE IF NOT EXISTS order_notes (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, admin_id INT NOT NULL, admin_name VARCHAR(120) NOT NULL DEFAULT '', note TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (order_id)) ENGINE=InnoDB");
         out(['success' => true, 'notes' => apx_rows($pdo, 'SELECT id, admin_name, note, created_at FROM order_notes WHERE order_id = ? ORDER BY id DESC', [$oid])]);
+
+    case 'order_tracking_save':
+        $m = oo_tracking_save($pdo, (int) $meAdmin['id'], (int) ($b['id'] ?? 0), (string) ($b['courier'] ?? ''), (string) ($b['number'] ?? ''), (string) ($b['note'] ?? ''));
+        if ($m !== '') fail($m, 409);
+        out(['success' => true]);
+
+    case 'order_refund_add':
+        $m = oo_refund_add($pdo, (int) $meAdmin['id'], (int) ($b['id'] ?? 0), (float) ($b['amount'] ?? 0), (string) ($b['reason'] ?? ''), (string) ($b['method'] ?? ''));
+        if ($m !== '') fail($m, 409);
+        out(['success' => true]);
+
+    case 'order_item_cancel':
+        $m = oo_item_cancel($pdo, (int) $meAdmin['id'], (int) ($b['id'] ?? 0), (int) ($b['product_id'] ?? 0));
+        if ($m !== '') fail($m, 409);
+        out(['success' => true]);
 
     case 'order_note_add':
         $oid = (int) ($b['id'] ?? 0);
