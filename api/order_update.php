@@ -52,11 +52,15 @@ try {
     if ($remaining === 0) {
         $pdo->prepare("UPDATE orders SET status = 'cancelled' WHERE id = ?")->execute([$id]);
         $cancelled = true;
+        require_once __DIR__ . '/../includes/coupons.php';
+        cp_release($pdo, $id);
         $total = 0.0;
     } else {
         $subtotal = round($subtotal, 2);
         $delivery = $subtotal < store_free_delivery_threshold($pdo) ? store_delivery_fee($pdo) : 0.0;
         $total = round($subtotal + $delivery, 2);
+        require_once __DIR__ . '/../includes/coupons.php';
+        $total = round($total - cp_reprice($pdo, $id, $subtotal, $delivery), 2);
         $pdo->prepare('UPDATE orders SET guest_phone = ?, address = ?, total = ? WHERE id = ?')->execute([$phone, $address, $total, $id]);
     }
     $pdo->commit();

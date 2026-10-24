@@ -74,7 +74,9 @@ function notify_queue(PDO $pdo, string $dedupe, string $audience, string $to, st
     notify_ensure($pdo);
     $q = $pdo->prepare('INSERT IGNORE INTO notify_outbox (dedupe, audience, to_email, to_name, subject, html) VALUES (?,?,?,?,?,?)');
     $q->execute([substr($dedupe, 0, 100), $audience, $to, mb_substr($name, 0, 120), mb_substr($subject, 0, 190), $html]);
-    return $q->rowCount() > 0;
+    $new = $q->rowCount() > 0;
+    if ($new) { try { require_once __DIR__ . '/push.php'; push_notify_email($pdo, $audience, $to, $subject); } catch (Throwable $e) { /* push is best-effort */ } }
+    return $new;
 }
 
 /** Send queued emails (a few at a time). Returns how many went out. */

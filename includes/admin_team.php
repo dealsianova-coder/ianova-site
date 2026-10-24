@@ -8,13 +8,14 @@ function team_ensure(PDO $pdo): void {
     $done = true;
     try {
         // the table changes below only need to run once (remembered in ops_settings)
-        $have = function_exists('ops_setting') && ops_setting($pdo, 'schema_team', '') === '3';
+        $have = function_exists('ops_setting') && ops_setting($pdo, 'schema_team', '') === '4';
         if (!$have) {
             $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS status VARCHAR(12) NOT NULL DEFAULT 'active'");
             $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_master TINYINT NOT NULL DEFAULT 0");
             $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS security_hash VARCHAR(255) NULL");
             $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS added_by INT NULL");
             $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS perms TEXT NULL");
+            $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS twofa TINYINT NOT NULL DEFAULT 0");
             $pdo->exec("CREATE TABLE IF NOT EXISTS admin_log (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, admin_name VARCHAR(120) NOT NULL DEFAULT '', action VARCHAR(60) NOT NULL, detail VARCHAR(300) NOT NULL DEFAULT '', ip VARCHAR(45) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (created_at), KEY (admin_id)) ENGINE=InnoDB");
             $pdo->exec("CREATE TABLE IF NOT EXISTS admin_sec_reset (admin_id INT PRIMARY KEY, token_hash CHAR(64) NOT NULL, expires_at DATETIME NOT NULL, requested_at DATETIME NOT NULL) ENGINE=InnoDB");
             $pdo->exec("CREATE TABLE IF NOT EXISTS admin_sec_fail (admin_id INT PRIMARY KEY, fails INT NOT NULL DEFAULT 0, until_at DATETIME NULL) ENGINE=InnoDB");
@@ -22,7 +23,7 @@ function team_ensure(PDO $pdo): void {
         if (!(int) $pdo->query('SELECT COUNT(*) FROM admins WHERE is_master = 1')->fetchColumn()) {
             $pdo->exec('UPDATE admins SET is_master = 1 WHERE id = (SELECT m FROM (SELECT MIN(id) m FROM admins) x)');
         }
-        if (!$have && function_exists('ops_setting_set')) ops_setting_set($pdo, 'schema_team', '3');
+        if (!$have && function_exists('ops_setting_set')) ops_setting_set($pdo, 'schema_team', '4');
     } catch (Throwable $e) { /* older MariaDB: columns may already exist */ }
 }
 
@@ -175,6 +176,9 @@ function team_sections(): array {
         'store' => ['🎛️ Store control', ['store.php']],
         'display' => ['🖥️ Display control', ['display.php']],
         'flash' => ['⚡ Flash deals', ['flash.php']],
+        'coupons' => ['🎟️ Coupons', ['coupons.php']],
+        'payouts' => ['💸 Seller payouts', ['payouts.php']],
+        'payments' => ['💳 Payments & deposits', ['payments.php']],
         'settings' => ['⚙️ Settings', ['settings.php']],
         'alerts' => ['🔔 Alerts', ['notifications.php']],
     ];
@@ -226,12 +230,12 @@ function team_section_of_action(string $file, string $a): ?string {
         if (isset($m[$a])) return $m[$a];
         return strpos($a, 'seller_') === 0 ? 'sellers' : null;
     }
-    $exact = ['dashboard' => 'dashboard', 'analytics' => 'analytics', 'orders_list' => 'orders', 'order_view' => 'orders', 'order_notes' => 'orders', 'order_note_add' => 'orders', 'order_tracking_save' => 'orders', 'order_refund_add' => 'orders', 'order_item_cancel' => 'orders', 'bulk_import' => 'products',
+    $exact = ['dashboard' => 'dashboard', 'analytics' => 'analytics', 'orders_list' => 'orders', 'order_view' => 'orders', 'order_notes' => 'orders', 'order_note_add' => 'orders', 'order_tracking_save' => 'orders', 'order_refund_add' => 'orders', 'order_item_cancel' => 'orders', 'order_payment_add' => 'orders', 'order_payment_delete' => 'orders', 'bulk_import' => 'products',
         'users_list' => 'users', 'user_save' => 'users', 'user_delete' => 'users', 'sellers_full' => 'sellers', 'seller_action' => 'sellers', 'auto_master' => 'sellers',
         'subscribers_list' => 'subscribers', 'subscriber_delete' => 'subscribers', 'suggestions_list' => 'suggestions', 'suggestion_reviewed' => 'suggestions',
         'alerts_tab' => 'alerts', 'alerts_tab_read' => 'alerts', 'settings_get' => 'settings', 'settings_set' => 'settings'];
     if (isset($exact[$a])) return $exact[$a];
-    foreach (['product' => 'products', 'category' => 'categories', 'categories' => 'categories', 'banner' => 'banners', 'flash' => 'flash', 'display' => 'display', 'video_ad' => 'video', 'mail' => 'email'] as $pre => $sec) {
+    foreach (['product' => 'products', 'category' => 'categories', 'categories' => 'categories', 'banner' => 'banners', 'flash' => 'flash', 'display' => 'display', 'video_ad' => 'video', 'mail' => 'email', 'coupon' => 'coupons', 'payout' => 'payouts', 'payment' => 'payments'] as $pre => $sec) {
         if (strpos($a, $pre . '_') === 0 || $a === $pre . 's_list') return $sec;
     }
     return null;

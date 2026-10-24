@@ -75,6 +75,25 @@ t('refund / tracking / item-cancel need the Orders section', team_section_of_act
 $pend = (int) $pdo->query("SELECT id FROM orders WHERE status = 'pending' ORDER BY id DESC LIMIT 1")->fetchColumn();
 if ($pend) t('refund refused on a pending order', oo_refund_add($pdo, 0, $pend, 1, 'test', 'test') !== ''); else skip('refund on pending order', 'no pending order');
 
+echo "== Payments, deposits, coupons, payouts\n";
+foreach (['payments', 'coupons', 'payouts'] as $inc) { $pf = __DIR__ . '/../includes/' . $inc . '.php'; if (is_file($pf)) require_once $pf; }
+if (function_exists('pay_ensure')) {
+    pay_ensure($pdo);
+    $hasPay = true; try { $pdo->query('SELECT 1 FROM order_payments LIMIT 1'); } catch (Throwable $e) { $hasPay = false; }
+    t('order_payments table', $hasPay);
+    $ocols2 = $pdo->query('SHOW COLUMNS FROM orders')->fetchAll(PDO::FETCH_COLUMN);
+    t('orders.pay_plan + deposit_pct columns', in_array('pay_plan', $ocols2, true) && in_array('deposit_pct', $ocols2, true));
+    $dp = pay_deposit_pct($pdo);
+    t('deposit % is between 0 and 100', $dp >= 0 && $dp <= 100);
+    t('recording a payment needs the Orders section', team_section_of_action('panel', 'order_payment_add') === 'orders' && team_section_of_action('panel', 'payments_list') === 'payments');
+    $lo = (int) $pdo->query("SELECT id FROM orders ORDER BY id DESC LIMIT 1")->fetchColumn();
+    if ($lo) { $ps = pay_summary($pdo, $lo); t("order #$lo: balance = total - paid", $ps !== null && abs($ps['balance'] - max(0, $ps['total'] - ($ps['paid'] - $ps['refunded']))) < 0.01); }
+    else skip('payment summary', 'no orders yet');
+    t('a payment above the balance is refused', $lo ? pay_add($pdo, 0, $lo, 99999999, 'test', '', '') !== '' : true);
+} else skip('payments', 'includes/payments.php is not installed');
+if (function_exists('cp_ensure')) { cp_ensure($pdo); $okc = true; try { $pdo->query('SELECT 1 FROM coupons LIMIT 1'); } catch (Throwable $e) { $okc = false; } t('coupons table', $okc); }
+if (function_exists('po_ensure')) { po_ensure($pdo); $okp = true; try { $pdo->query('SELECT 1 FROM seller_payouts LIMIT 1'); } catch (Throwable $e) { $okp = false; } t('seller_payouts table', $okp); t('commission % is between 0 and 100', po_default_rate($pdo) >= 0 && po_default_rate($pdo) <= 100); }
+
 echo "== Cancelled orders\n";
 require_once __DIR__ . '/../includes/seller_orders.php';
 $cid = (int) $pdo->query("SELECT id FROM orders WHERE status = 'cancelled' ORDER BY id DESC LIMIT 1")->fetchColumn();
@@ -86,6 +105,9 @@ if ($cid) {
 echo "== Email setup\n";
 t('PHPMailer installed', class_exists('PHPMailer\\PHPMailer\\PHPMailer') || is_file(__DIR__ . '/../vendor/autoload.php'));
 t('SMTP password set', defined('SMTP_PASS') && SMTP_PASS !== '' && strpos(SMTP_PASS, ' ') === false, 'empty or has spaces');
+require_once __DIR__ . '/../includes/push.php';
+t('phone push ready (Firebase key on the server)', push_enabled(), 'put firebase-service-account.json in the site folder');
+try { push_ensure($pdo); $pdo->query('SELECT 1 FROM device_tokens LIMIT 1'); t('phone tokens table', true); } catch (Throwable $e) { t('phone tokens table', false); }
 t('SITE_URL set (needed for email links)', defined('SITE_URL') && SITE_URL !== '', 'set SITE_URL in config.local.php');
 $logo = is_file(__DIR__ . '/../assets/img/ianova-email-logo.png');
 t('email logo file exists', $logo);

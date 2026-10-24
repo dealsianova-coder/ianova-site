@@ -70,7 +70,11 @@ function oo_refund_add(PDO $pdo, int $adminId, int $orderId, float $amount, stri
     $q = $pdo->prepare('SELECT status, total FROM orders WHERE id = ?'); $q->execute([$orderId]);
     $o = $q->fetch(PDO::FETCH_ASSOC);
     if (!$o) return 'Order not found.';
-    if ($o['status'] === 'pending') return 'Nothing was paid yet: this order is still pending.';
+    if ($o['status'] === 'pending') {   // a pending order can still have a deposit recorded
+        $hasPay = false;
+        try { $hasPay = (float) $pdo->query('SELECT COALESCE(SUM(amount),0) FROM order_payments WHERE order_id = ' . (int) $orderId)->fetchColumn() > 0; } catch (Throwable $e) { $hasPay = false; }
+        if (!$hasPay) return 'Nothing was paid yet: this order is still pending.';
+    }
     $amount = round($amount, 2);
     if ($amount <= 0) return 'Enter an amount above zero.';
     $e = oo_extras($pdo, $orderId);
@@ -114,17 +118,20 @@ function oo_item_cancel(PDO $pdo, int $adminId, int $orderId, int $productId): s
     $delivery = max(0.0, round((float) $o['total'] - $oldSub, 2));
     if (function_exists('store_delivery_fee') && function_exists('store_free_delivery_threshold')) $delivery = $newSub < store_free_delivery_threshold($pdo) ? store_delivery_fee($pdo) : 0.0;
     $own = !$pdo->inTransaction();
+    $disc = 0.0;
     if ($own) $pdo->beginTransaction();
     try {
         if (!empty($target['stock_reserved'])) $pdo->prepare('UPDATE products SET stock = stock + ? WHERE id = ?')->execute([$target['quantity'], $target['product_id']]);
         $pdo->prepare('DELETE FROM order_items WHERE id = ?')->execute([$target['id']]);
-        $pdo->prepare('UPDATE orders SET total = ? WHERE id = ?')->execute([round($newSub + $delivery, 2), $orderId]);
+        require_once __DIR__ . '/coupons.php';
+        $disc = cp_reprice($pdo, $orderId, $newSub, $delivery);   // a coupon on this order is recalculated for the smaller order
+        $pdo->prepare('UPDATE orders SET total = ? WHERE id = ?')->execute([round($newSub + $delivery - $disc, 2), $orderId]);
         if ($own) $pdo->commit();
     } catch (Throwable $e) {
         if ($own && $pdo->inTransaction()) $pdo->rollBack();
         return 'Could not cancel the item.';
     }
-    oo_note($pdo, $adminId, $orderId, 'Cancelled item: ' . $target['name'] . ' × ' . (int) $target['quantity'] . ' (' . number_format($line, 2) . '). New total ' . number_format($newSub + $delivery, 2) . '.');
+    oo_note($pdo, $adminId, $orderId, 'Cancelled item: ' . $target['name'] . ' × ' . (int) $target['quantity'] . ' (' . number_format($line, 2) . '). New total ' . number_format($newSub + $delivery - $disc, 2) . '.');
     oo_log($pdo, $adminId, 'order_item_cancel', '#' . $orderId . ' product ' . $productId);
     require_once __DIR__ . '/notify.php';
     $od = notify_order_data($pdo, $orderId);

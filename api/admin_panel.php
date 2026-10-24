@@ -13,6 +13,9 @@ require_once __DIR__ . '/../includes/notify.php';
 require_once __DIR__ . '/../includes/analytics.php';
 require_once __DIR__ . '/../includes/admin_team.php';
 require_once __DIR__ . '/../includes/order_ops.php';
+require_once __DIR__ . '/../includes/coupons.php';
+require_once __DIR__ . '/../includes/payouts.php';
+require_once __DIR__ . '/../includes/payments.php';
 team_ensure($pdo);
 oo_ensure($pdo);
 date_default_timezone_set('Africa/Nairobi');
@@ -105,7 +108,7 @@ $img = image_column($pdo);
 $__sec = team_section_of_action('panel', (string) $action);
 if ($__sec !== null && !team_can($pdo, (int) $meAdmin['id'], $__sec)) fail('You do not have access to this section. Ask the master admin.', 403);
 
-if (preg_match('/(_save|_delete|_action|_toggle|_status|_set|_send|_import|_flush|_clear|_add|_do|_perms|_reviewed|_read)$|^(auto_master|bulk_import|mail_test|mail_newsletter|order_note_add|order_item_cancel)$/', (string) $action) && !in_array($action, ['alerts_tab_read', 'team_do', 'team_add', 'team_perms', 'team_set_security', 'admin_account_save', 'order_tracking_save', 'order_refund_add', 'order_item_cancel'], true)) {
+if (preg_match('/(_save|_delete|_action|_toggle|_status|_set|_send|_import|_flush|_clear|_add|_do|_perms|_reviewed|_read)$|^(auto_master|bulk_import|mail_test|mail_newsletter|order_note_add|order_item_cancel|payout_rate)$/', (string) $action) && !in_array($action, ['alerts_tab_read', 'team_do', 'team_add', 'team_perms', 'team_set_security', 'admin_account_save', 'order_tracking_save', 'order_refund_add', 'order_item_cancel'], true)) {
     $__d = []; foreach (['id', 'status', 'do', 'name', 'key'] as $__k) if (isset($b[$__k]) && is_scalar($b[$__k])) $__d[] = $__k . '=' . substr((string) $b[$__k], 0, 40);
     team_log($pdo, (int) $meAdmin['id'], (string) $action, implode(' ', $__d));
 }
@@ -252,7 +255,7 @@ switch ($action) {
         ksort($groups);
         $out = [];
         foreach ($groups as $g) { $g['total'] = aou_lines_total($g['lines']); $out[] = $g; }
-        out(oo_extras($pdo, $id) + ['success' => true, 'order' => ['id' => (int) $o['id'], 'status' => $o['status'], 'created_at' => $o['created_at'], 'customer' => $o['customer'], 'email' => (string) $o['email'],
+        out(oo_extras($pdo, $id) + ['pay' => (pay_order_fields($pdo, $id) + ['list' => pay_list($pdo, $id)])] + ['success' => true, 'order' => ['id' => (int) $o['id'], 'status' => $o['status'], 'created_at' => $o['created_at'], 'customer' => $o['customer'], 'email' => (string) $o['email'],
             'phone' => (string) ($o['guest_phone'] ?? ''), 'address' => (string) ($o['address'] ?? ''), 'total' => (float) $o['total']],
             'groups' => $out, 'subtotal' => $sub, 'delivery' => round((float) $o['total'] - $sub, 2),
             'notes' => apx_rows($pdo, 'SELECT id, admin_name, note, created_at FROM order_notes WHERE order_id = ? ORDER BY id DESC', [$id])]);
@@ -866,6 +869,69 @@ switch ($action) {
         }
         fclose($h);
         out(['success' => true, 'saved' => $okCount, 'errors' => $errs]);
+
+    // ============================== COUPONS ==============================
+    case 'coupons_list':
+        out(['success' => true, 'coupons' => cp_list($pdo)]);
+
+    case 'coupon_save':
+        $m = cp_save($pdo, (int) ($b['id'] ?? 0), $b);
+        if ($m !== '') fail($m, 422);
+        out(['success' => true, 'coupons' => cp_list($pdo)]);
+
+    case 'coupon_toggle':
+        $pdo->prepare('UPDATE coupons SET active = 1 - active WHERE id = ?')->execute([(int) ($b['id'] ?? 0)]);
+        out(['success' => true, 'coupons' => cp_list($pdo)]);
+
+    case 'coupon_delete':
+        $pdo->prepare('DELETE FROM coupons WHERE id = ?')->execute([(int) ($b['id'] ?? 0)]);
+        out(['success' => true, 'coupons' => cp_list($pdo)]);
+
+    // ============================== SELLER PAYOUTS ==============================
+    case 'payouts_list':
+        $rows = po_overview($pdo);
+        $owed = 0.0; $paid = 0.0; foreach ($rows as $r) { $owed += max(0, $r['balance']); $paid += $r['paid']; }
+        out(['success' => true, 'default_rate' => po_default_rate($pdo), 'owed' => round($owed, 2), 'paid' => round($paid, 2), 'sellers' => $rows]);
+
+    case 'payout_history':
+        out(['success' => true, 'payouts' => po_history($pdo, (int) ($b['seller_id'] ?? $_GET['seller_id'] ?? 0), 60)]);
+
+    case 'payout_add':
+        $m = po_add($pdo, (int) $meAdmin['id'], (int) ($b['seller_id'] ?? 0), (float) ($b['amount'] ?? 0), (string) ($b['method'] ?? ''), (string) ($b['reference'] ?? ''), (string) ($b['note'] ?? ''));
+        if ($m !== '') fail($m, 422);
+        out(['success' => true]);
+
+    case 'payout_rate':
+        $raw = $b['rate'] ?? null;
+        $m = po_set_rate($pdo, (int) ($b['seller_id'] ?? 0), ($raw === null || $raw === '') ? null : $raw);
+        if ($m !== '') fail($m, 422);
+        out(['success' => true]);
+
+    // ============================== DEPOSITS + PAYMENTS ==============================
+    case 'payment_settings_get':
+        out(['success' => true] + pay_settings_get($pdo));
+
+    case 'payment_settings_set':
+        $m = pay_settings_save($pdo, $b['deposit_pct'] ?? '', (string) ($b['instructions'] ?? ''));
+        if ($m !== '') fail($m, 422);
+        out(['success' => true] + pay_settings_get($pdo));
+
+    case 'payments_list':
+        $f = (string) ($_GET['filter'] ?? $b['filter'] ?? 'part');
+        if (!in_array($f, ['deposit', 'part', 'unpaid', 'all'], true)) $f = 'part';
+        $rows = pay_balances($pdo, $f, 100);
+        $due = 0.0; foreach ($rows as $r) $due += $r['balance'];
+        out(['success' => true, 'filter' => $f, 'orders' => $rows, 'due' => round($due, 2)] + pay_settings_get($pdo));
+
+    case 'order_payment_add':
+        $m = pay_add($pdo, (int) $meAdmin['id'], (int) ($b['id'] ?? 0), (float) ($b['amount'] ?? 0), (string) ($b['method'] ?? ''), (string) ($b['reference'] ?? ''), (string) ($b['note'] ?? ''));
+        if ($m !== '') fail($m, 422);
+        out(['success' => true]);
+
+    case 'order_payment_delete':
+        $m = pay_delete($pdo, (int) $meAdmin['id'], (int) ($b['payment_id'] ?? 0));
+        if ($m !== '') fail($m, 422);
+        out(['success' => true]);
 
     // ============================== ANALYTICS ==============================
     case 'analytics':

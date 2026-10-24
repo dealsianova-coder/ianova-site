@@ -49,7 +49,7 @@ function set_order_status(PDO $pdo, int $orderId, string $status): string {
     if ($own) $pdo->beginTransaction();
     try {
         $pdo->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute([$status, $orderId]);
-        if ($status === 'cancelled') release_order_stock($pdo, $orderId);
+        if ($status === 'cancelled') { release_order_stock($pdo, $orderId); require_once __DIR__ . '/coupons.php'; cp_release($pdo, $orderId); }
         if ($own) $pdo->commit();
     } catch (Throwable $e) {
         if ($own && $pdo->inTransaction()) $pdo->rollBack();

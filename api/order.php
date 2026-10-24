@@ -1,9 +1,11 @@
 <?php
 require __DIR__ . '/_bootstrap.php';
 $user = require_user($pdo);
+require_once __DIR__ . '/../includes/coupons.php';
+cp_ensure($pdo);
 $id = (int) ($_GET['id'] ?? 0);
 if ($id < 1) fail('Invalid order ID.');
-$s = $pdo->prepare('SELECT id, guest_name, guest_email, guest_phone, address, total, status, created_at FROM orders WHERE id = ? AND user_id = ?');
+$s = $pdo->prepare('SELECT id, guest_name, guest_email, guest_phone, address, total, status, created_at, coupon_code, discount FROM orders WHERE id = ? AND user_id = ?');
 $s->execute([$id, (int) $user['id']]);
 $order = $s->fetch();
 if (!$order) fail('Order not found.', 404);
@@ -19,5 +21,7 @@ $i->execute([$id]);
 $items = $i->fetchAll();
 $subtotal = round(array_sum(array_column($items, 'item_total')), 2);
 $order['subtotal'] = $subtotal;
-$order['delivery'] = round((float) $order['total'] - $subtotal, 2);
+$order['delivery'] = round((float) $order['total'] - $subtotal + (float) ($order['discount'] ?? 0), 2);
+require_once __DIR__ . '/../includes/payments.php';
+$order += pay_order_fields($pdo, $id);
 out(['success' => true, 'order' => $order, 'items' => $items]);
