@@ -247,10 +247,12 @@ switch ($action) {
         $appr = aou_approvals($pdo, [$id])[$id] ?? [];
         $sub = aou_lines_total($lines);
         $groups = [];
+        $ist = oo_item_statuses($pdo, $id);
         foreach ($lines as $l) {
             $sid = (int) ($l['seller_id'] ?? 0);
             if (!isset($groups[$sid])) $groups[$sid] = ['seller_id' => $sid, 'name' => $sid === 0 ? 'IANOVA (main)' : (string) $l['seller_name'], 'is_main' => $sid === 0, 'lines' => [], 'approved' => $sid === 0 ? null : (isset($appr[$sid]) ? (bool) $appr[$sid]['at'] : false)];
-            $groups[$sid]['lines'][] = apx_line($l);
+            $gl = apx_line($l); $gl['item_status'] = $ist[(int) ($l['product_id'] ?? 0)] ?? '';
+            $groups[$sid]['lines'][] = $gl;
         }
         ksort($groups);
         $out = [];
@@ -464,6 +466,11 @@ switch ($action) {
 
     case 'order_item_cancel':
         $m = oo_item_cancel($pdo, (int) $meAdmin['id'], (int) ($b['id'] ?? 0), (int) ($b['product_id'] ?? 0));
+        if ($m !== '') fail($m, 409);
+        out(['success' => true]);
+
+    case 'order_item_status':
+        $m = oo_item_status($pdo, (int) $meAdmin['id'], (int) ($b['id'] ?? 0), (int) ($b['product_id'] ?? 0), (string) ($b['status'] ?? ''));
         if ($m !== '') fail($m, 409);
         out(['success' => true]);
 

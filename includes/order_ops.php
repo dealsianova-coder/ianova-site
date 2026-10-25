@@ -6,14 +6,15 @@ function oo_ensure(PDO $pdo): void {
     static $done = false;
     if ($done) return;
     $done = true;
-    if (function_exists('ops_setting') && ops_setting($pdo, 'schema_oo', '') === '1') return;
+    if (function_exists('ops_setting') && ops_setting($pdo, 'schema_oo', '') === '2') return;
     try {
         $pdo->exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_courier VARCHAR(60) NOT NULL DEFAULT ''");
         $pdo->exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_no VARCHAR(80) NOT NULL DEFAULT ''");
         $pdo->exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_note VARCHAR(200) NOT NULL DEFAULT ''");
         $pdo->exec("CREATE TABLE IF NOT EXISTS order_refunds (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, amount DECIMAL(12,2) NOT NULL, reason VARCHAR(200) NOT NULL DEFAULT '', method VARCHAR(40) NOT NULL DEFAULT '', admin_id INT NOT NULL DEFAULT 0, admin_name VARCHAR(120) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (order_id)) ENGINE=InnoDB");
         $pdo->exec("CREATE TABLE IF NOT EXISTS order_notes (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, admin_id INT NOT NULL, admin_name VARCHAR(120) NOT NULL DEFAULT '', note TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (order_id)) ENGINE=InnoDB");
-        if (function_exists('ops_setting_set')) ops_setting_set($pdo, 'schema_oo', '1');
+        $pdo->exec("ALTER TABLE order_items ADD COLUMN IF NOT EXISTS item_status VARCHAR(12) NOT NULL DEFAULT ''");
+        if (function_exists('ops_setting_set')) ops_setting_set($pdo, 'schema_oo', '2');
     } catch (Throwable $e) {
     }
 }
@@ -139,5 +140,35 @@ function oo_item_cancel(PDO $pdo, int $adminId, int $orderId, int $productId): s
         notify_queue($pdo, 'item_cancel:' . $orderId . ':' . $productId . ':' . $target['id'], 'customer', (string) $od['cemail'], (string) $od['cname'], 'An item was removed from order #' . $orderId,
             notify_wrap('An item was removed', '<p>Hello ' . notify_esc($od['cname']) . ',</p><p>We removed <strong>' . notify_esc($target['name']) . '</strong> from order <strong>#' . $orderId . '</strong>.</p>' . notify_lines_html($od['lines']) . '<p><strong>New total: ' . notify_money($od['total']) . '</strong></p>'));
     }
+    return '';
+}
+
+/** product_id => 'packed'|'shipped'|'delivered' for the items of one order that have their own status. */
+function oo_item_statuses(PDO $pdo, int $orderId): array {
+    oo_ensure($pdo);
+    $o = [];
+    try {
+        $q = $pdo->prepare('SELECT product_id, item_status FROM order_items WHERE order_id = ?'); $q->execute([$orderId]);
+        foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) if ((string) $r['item_status'] !== '') $o[(int) $r['product_id']] = (string) $r['item_status'];
+    } catch (Throwable $e) {
+    }
+    return $o;
+}
+
+/** Give one item its own progress ('' clears it). Cancelled orders cannot change. '' on success, otherwise the message. */
+function oo_item_status(PDO $pdo, int $adminId, int $orderId, int $productId, string $status): string {
+    oo_ensure($pdo);
+    if (!in_array($status, ['', 'packed', 'shipped', 'delivered'], true)) return 'Unknown item status.';
+    $q = $pdo->prepare('SELECT status FROM orders WHERE id = ?'); $q->execute([$orderId]);
+    $st = $q->fetchColumn();
+    if ($st === false) return 'Order not found.';
+    if ($st === 'cancelled') return 'This order is cancelled and cannot be changed.';
+    if ($st === 'pending') return 'Approve the order before packing or shipping items.';
+    $n = $pdo->prepare('SELECT COALESCE(p.name, "Item") FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ? AND oi.product_id = ? LIMIT 1');
+    $n->execute([$orderId, $productId]);
+    $name = $n->fetchColumn();
+    if ($name === false) return 'That item is not in this order.';
+    $pdo->prepare('UPDATE order_items SET item_status = ? WHERE order_id = ? AND product_id = ?')->execute([$status, $orderId, $productId]);
+    oo_note($pdo, $adminId, $orderId, 'Item "' . $name . '" ' . ($status === '' ? 'status cleared.' : 'marked ' . $status . '.'));
     return '';
 }

@@ -61,7 +61,7 @@ seller_head('Orders', 'orders.php');
     </div>
     <div class="olist">
     <?php foreach ($o['items'] as $it): $opt = trim(($it['color'] ?? '') . ' ' . ($it['size'] ?? '')); ?>
-      <a class="orow" href="product_view.php?id=<?= (int) $it['product_id'] ?>" style="padding:8px 10px;text-decoration:none;color:inherit">
+      <a class="orow" href="order_item.php?id=<?= (int) $o['id'] ?>&p=<?= (int) $it['product_id'] ?>&c=<?= urlencode((string) ($it['color'] ?? '')) ?>&s=<?= urlencode((string) ($it['size'] ?? '')) ?>" style="padding:8px 10px;text-decoration:none;color:inherit">
         <?= sel_photo($it['image'] ?? '', $it['name'], 'ph mini', $it['emoji'] ?: '🛍️', true) ?>
         <span class="o-main"><b><?= ops_h($it['name']) ?></b><small><?= (int) $it['quantity'] ?> × <?= CURRENCY . number_format($it['unit_price'], 2) ?><?= $opt !== '' ? ' · ' . ops_h($opt) : '' ?></small></span>
         <span class="o-side"><b><?= CURRENCY . number_format($it['quantity'] * $it['unit_price'], 2) ?></b></span>

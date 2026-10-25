@@ -59,6 +59,7 @@ seller_head('Dashboard', 'index.php');
   <?php endforeach; ?>
 </div>
 
+<?php require_once __DIR__ . '/seller_balance_box.php'; seller_balance_box($pdo, $seller_id); ?>
 <div class="blk">
   <div class="blk-head"><h2>Automatic order approval: <span style="color:<?= $autoOn ? '#0B6B37' : '#B00F2F' ?>"><?= $autoOn ? 'ON' : 'OFF' ?></span></h2>
     <form method="post" action="auto_approval.php" style="margin:0"><input type="hidden" name="csrf" value="<?= ops_h($_SESSION['ops_csrf']) ?>"><input type="hidden" name="on" value="<?= $autoMine ? '0' : '1' ?>"><button class="btn <?= $autoMine ? 'red' : 'ok' ?>" type="submit"><?= $autoMine ? 'Switch to manual' : 'Switch on automatic' ?></button></form></div>

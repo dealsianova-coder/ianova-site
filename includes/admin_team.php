@@ -230,7 +230,7 @@ function team_section_of_action(string $file, string $a): ?string {
         if (isset($m[$a])) return $m[$a];
         return strpos($a, 'seller_') === 0 ? 'sellers' : null;
     }
-    $exact = ['dashboard' => 'dashboard', 'analytics' => 'analytics', 'orders_list' => 'orders', 'order_view' => 'orders', 'order_notes' => 'orders', 'order_note_add' => 'orders', 'order_tracking_save' => 'orders', 'order_refund_add' => 'orders', 'order_item_cancel' => 'orders', 'order_payment_add' => 'orders', 'order_payment_delete' => 'orders', 'bulk_import' => 'products',
+    $exact = ['dashboard' => 'dashboard', 'analytics' => 'analytics', 'orders_list' => 'orders', 'order_view' => 'orders', 'order_notes' => 'orders', 'order_note_add' => 'orders', 'order_tracking_save' => 'orders', 'order_refund_add' => 'orders', 'order_item_cancel' => 'orders', 'order_item_status' => 'orders', 'order_payment_add' => 'orders', 'order_payment_delete' => 'orders', 'bulk_import' => 'products',
         'users_list' => 'users', 'user_save' => 'users', 'user_delete' => 'users', 'sellers_full' => 'sellers', 'seller_action' => 'sellers', 'auto_master' => 'sellers',
         'subscribers_list' => 'subscribers', 'subscriber_delete' => 'subscribers', 'suggestions_list' => 'suggestions', 'suggestion_reviewed' => 'suggestions',
         'alerts_tab' => 'alerts', 'alerts_tab_read' => 'alerts', 'settings_get' => 'settings', 'settings_set' => 'settings'];

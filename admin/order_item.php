@@ -1,6 +1,7 @@
 <?php
 require_once 'includes/auth.php';
 require_once __DIR__ . '/../includes/admin_orders_ui.php';
+require_once __DIR__ . '/../includes/order_ops.php';
 $id = (int) ($_GET['id'] ?? 0);
 $pid = (int) ($_GET['p'] ?? 0);
 $col = (string) ($_GET['c'] ?? ''); $siz = (string) ($_GET['s'] ?? '');
@@ -38,6 +39,9 @@ $qty = (int) $line['quantity']; $price = (float) $line['unit_price'];
   <div class="card" style="border-left:5px solid <?= $sid === 0 ? '#1d6b52' : '#b58117' ?>"><h3 style="margin:0 0 8px">Sold by</h3>
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><b><?= $sid === 0 ? '🏠 IANOVA (main)' : '🏪 ' . admin_h($line['seller_name'] ?? '') ?></b>
     <?php if ($sid === 0): ?><span class="tag na">Managed by you</span><?php else: ?><?= aou_approval_tags(isset($appr[$sid]) ? [$sid => $appr[$sid]] : []) ?><?php endif; ?></div></div>
+  <?php if (!in_array($o['status'], ['pending', 'cancelled'], true)): $cur = oo_item_statuses($pdo, $id)[$pid] ?? ''; ?><div class="card" style="border-left:5px solid #1d6b52"><h3 style="margin:0 0 6px">This item's progress</h3><p class="muted" style="margin:0 0 10px">Pack and ship items one at a time. The order itself keeps its own status.</p>
+    <form method="post" action="order_ops.php" style="display:flex;gap:8px;flex-wrap:wrap"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>"><input type="hidden" name="kind" value="item_status"><input type="hidden" name="id" value="<?= (int) $id ?>"><input type="hidden" name="product_id" value="<?= (int) $pid ?>">
+    <?php foreach (['' => 'Not started', 'packed' => 'Packed', 'shipped' => 'Shipped', 'delivered' => 'Delivered'] as $k => $lab): ?><button name="status" value="<?= $k ?>" class="btn <?= $cur === $k ? 'green' : 'gray' ?>"><?= $lab ?></button><?php endforeach; ?></form></div><?php endif; ?>
   <?php if (in_array($o['status'], ['pending', 'approved', 'paid'], true)): ?><form method="post" action="order_ops.php" class="card" style="border-left:5px solid #b83b3b"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>"><input type="hidden" name="kind" value="item_cancel"><input type="hidden" name="id" value="<?= (int) $id ?>"><input type="hidden" name="product_id" value="<?= (int) $pid ?>">
     <h3 style="margin:0 0 6px">Cancel this item</h3><p class="muted" style="margin:0 0 10px">Removes only this item, puts its stock back, works out the new total and emails the customer.</p><button class="btn red" onclick="return confirm('Cancel this item?')">Cancel item</button></form><?php endif; ?>
 </div>

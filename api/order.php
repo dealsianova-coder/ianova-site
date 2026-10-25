@@ -19,6 +19,10 @@ $i = $pdo->prepare(
 );
 $i->execute([$id]);
 $items = $i->fetchAll();
+require_once __DIR__ . '/../includes/order_ops.php';
+$ist = oo_item_statuses($pdo, $id);   // item_status: packed / shipped / delivered / ''
+foreach ($items as &$it_) { $it_['item_status'] = $ist[(int) $it_['product_id']] ?? ''; }
+unset($it_);
 $subtotal = round(array_sum(array_column($items, 'item_total')), 2);
 $order['subtotal'] = $subtotal;
 $order['delivery'] = round((float) $order['total'] - $subtotal + (float) ($order['discount'] ?? 0), 2);
