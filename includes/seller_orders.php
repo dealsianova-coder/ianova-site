@@ -45,10 +45,13 @@ function set_order_status(PDO $pdo, int $orderId, string $status): string {
     if ($old === $status) return '';
     if ($old === 'cancelled') return 'A cancelled order cannot be reopened. Ask the customer to place a new order.';
 
+    require_once __DIR__ . '/order_ops.php';
+    if (!$pdo->inTransaction()) oo_ensure($pdo);   // creates the history table before the change starts
     $own = !$pdo->inTransaction();
     if ($own) $pdo->beginTransaction();
     try {
         $pdo->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute([$status, $orderId]);
+        oo_event($pdo, $orderId, $status);
         if ($status === 'cancelled') { release_order_stock($pdo, $orderId); require_once __DIR__ . '/coupons.php'; cp_release($pdo, $orderId); }
         if ($own) $pdo->commit();
     } catch (Throwable $e) {

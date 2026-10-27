@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int) ($_POST['id'] ?? 0);
     if (false) {
     } elseif (isset($_POST['delete'])) {
-        $pdo->prepare('DELETE FROM users WHERE id=?')->execute([$id]);
+        require_once __DIR__ . '/../includes/user_remove.php'; $r_ = user_remove($pdo, $id); $_SESSION['oo_flash'] = $r_['message']; $_SESSION['oo_flash_err'] = 0;
     } else {
         $name = trim((string) ($_POST['name'] ?? '')); $email = trim((string) ($_POST['email'] ?? ''));
         if ($id) $pdo->prepare('UPDATE users SET name=?,email=? WHERE id=?')->execute([$name, $email, $id]);

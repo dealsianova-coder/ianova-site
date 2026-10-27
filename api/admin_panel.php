@@ -27,6 +27,7 @@ if ($token === '') fail('Please sign in as admin.', 401);
 $st0 = $pdo->prepare('SELECT a.id FROM admin_tokens t JOIN admins a ON a.id = t.admin_id WHERE t.token_hash = ? AND t.expires_at > NOW() AND a.status = \'active\' LIMIT 1');
 $st0->execute([hash('sha256', $token)]);
 $meAdmin = $st0->fetch(PDO::FETCH_ASSOC);
+if ($meAdmin) $GLOBALS['ORDER_ACTOR_ID'] = (int) $meAdmin['id'];
 if (!$meAdmin) fail('Admin session expired. Please sign in again.', 401);
 
 $b = body();
@@ -131,6 +132,8 @@ switch ($action) {
             'unread_messages' => (int) apx_val($pdo, "SELECT COUNT(*) FROM seller_messages WHERE sender = 'seller' AND read_at IS NULL"),
             'alerts' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM admin_notifications WHERE read_at IS NULL'),
         ];
+        require_once __DIR__ . '/../includes/attention.php';
+        $counts += attn_counts($pdo);
         // IANOVA orders
         [$sql, $par] = aou_scope_sql('main');
         $q = $pdo->prepare("SELECT o.id, COALESCE(o.guest_name, u.name, 'Guest') customer, o.total, o.status, o.created_at FROM orders o LEFT JOIN users u ON u.id = o.user_id WHERE 1=1" . $sql . ' ORDER BY o.id DESC LIMIT 5');
@@ -214,9 +217,12 @@ switch ($action) {
             $like = '%' . $qtext . '%';
             array_push($par, (int) ltrim($qtext, '#'), $like, $like, $like);
         }
-        $q = $pdo->prepare($sql . ' ORDER BY o.id DESC LIMIT 200');
+        $lim = max(20, min(600, (int) ($_GET['limit'] ?? 200)));
+        $q = $pdo->prepare($sql . ' ORDER BY o.id DESC LIMIT ' . ($lim + 1));
         $q->execute($par);
         $orders = $q->fetchAll(PDO::FETCH_ASSOC);
+        $more = count($orders) > $lim;
+        if ($more) $orders = array_slice($orders, 0, $lim);
         $ids = array_column($orders, 'id');
         $items = aou_items($pdo, $ids);
         $appr = aou_approvals($pdo, $ids);
@@ -235,7 +241,7 @@ switch ($action) {
         $chips = [];
         foreach (aou_seller_counts($pdo) as $sid => $s0) $chips[] = ['id' => (int) $sid, 'name' => $s0['name'], 'orders' => $s0['orders'], 'waiting' => $s0['waiting']];
         out(['success' => true, 'tab' => $tab, 'n_main' => aou_scope_count($pdo, 'main'), 'n_sellers' => aou_scope_count($pdo, 'sellers'),
-            'status_counts' => $byStatus, 'seller_chips' => $chips, 'orders' => $list]);
+            'status_counts' => $byStatus, 'seller_chips' => $chips, 'orders' => $list, 'more' => $more]);
 
     case 'order_view':
         $id = (int) ($_GET['id'] ?? $b['id'] ?? 0);
@@ -257,7 +263,7 @@ switch ($action) {
         ksort($groups);
         $out = [];
         foreach ($groups as $g) { $g['total'] = aou_lines_total($g['lines']); $out[] = $g; }
-        out(oo_extras($pdo, $id) + ['pay' => (pay_order_fields($pdo, $id) + ['list' => pay_list($pdo, $id)])] + ['success' => true, 'order' => ['id' => (int) $o['id'], 'status' => $o['status'], 'created_at' => $o['created_at'], 'customer' => $o['customer'], 'email' => (string) $o['email'],
+        out(oo_extras($pdo, $id) + ['timeline' => oo_timeline($pdo, $id)] + ['pay' => (pay_order_fields($pdo, $id) + ['list' => pay_list($pdo, $id)])] + ['success' => true, 'order' => ['id' => (int) $o['id'], 'status' => $o['status'], 'created_at' => $o['created_at'], 'customer' => $o['customer'], 'email' => (string) $o['email'],
             'phone' => (string) ($o['guest_phone'] ?? ''), 'address' => (string) ($o['address'] ?? ''), 'total' => (float) $o['total']],
             'groups' => $out, 'subtotal' => $sub, 'delivery' => round((float) $o['total'] - $sub, 2),
             'notes' => apx_rows($pdo, 'SELECT id, admin_name, note, created_at FROM order_notes WHERE order_id = ? ORDER BY id DESC', [$id])]);
@@ -275,11 +281,14 @@ switch ($action) {
         if (in_array($filter, ['pending', 'approved', 'rejected', 'hidden'], true)) { $where[] = 'p.status = ?'; $par[] = $filter; }
         if ($cat > 0) { $where[] = 'p.category_id = ?'; $par[] = $cat; }
         if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
-        $sql .= " ORDER BY (p.status = 'pending') DESC, p.id DESC LIMIT 300";
+        $lim = max(20, min(600, (int) ($_GET['limit'] ?? 300)));
+        $sql .= " ORDER BY (p.status = 'pending') DESC, p.id DESC LIMIT " . ($lim + 1);
         $rows = apx_rows($pdo, $sql, $par);
+        $more = count($rows) > $lim;
+        if ($more) $rows = array_slice($rows, 0, $lim);
         $counts = ['all' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM products')];
         foreach (['pending', 'approved', 'rejected', 'hidden'] as $s1) $counts[$s1] = (int) apx_val($pdo, 'SELECT COUNT(*) FROM products WHERE status = ?', [$s1]);
-        out(['success' => true, 'products' => $rows, 'counts' => $counts]);
+        out(['success' => true, 'products' => $rows, 'counts' => $counts, 'more' => $more]);
 
     case 'product_view':
         $id = (int) ($_GET['id'] ?? $b['id'] ?? 0);
@@ -426,10 +435,17 @@ switch ($action) {
 
     // ============================== USERS ==============================
     case 'users_list':
+        $uq = trim((string) ($_GET['q'] ?? ''));
+        $ulim = max(20, min(1000, (int) ($_GET['limit'] ?? 500)));
+        $uw = ''; $up = []; $sw = ''; $sp = [];
+        if ($uq !== '') { $lk = '%' . $uq . '%'; $uw = ' WHERE (u.name LIKE ? OR u.email LIKE ?)'; $up = [$lk, $lk]; $sw = ' WHERE (s.business_name LIKE ? OR s.email LIKE ?)'; $sp = [$lk, $lk]; }
+        $ur = apx_rows($pdo, 'SELECT u.id, u.name, u.email, u.created_at, COUNT(o.id) orders FROM users u LEFT JOIN orders o ON o.user_id = u.id' . $uw . ' GROUP BY u.id ORDER BY u.id DESC LIMIT ' . ($ulim + 1), $up);
+        $umore = count($ur) > $ulim;
+        if ($umore) $ur = array_slice($ur, 0, $ulim);
         out(['success' => true,
             'me' => (int) $meAdmin['id'],
-            'sellers' => apx_rows($pdo, 'SELECT s.id, s.business_name, s.email, s.status, s.created_at, COUNT(p.id) products FROM sellers s LEFT JOIN products p ON p.seller_id = s.id GROUP BY s.id ORDER BY s.id DESC LIMIT 500'),
-            'users' => apx_rows($pdo, 'SELECT u.id, u.name, u.email, u.created_at, COUNT(o.id) orders FROM users u LEFT JOIN orders o ON o.user_id = u.id GROUP BY u.id ORDER BY u.id DESC LIMIT 500')]);
+            'sellers' => apx_rows($pdo, 'SELECT s.id, s.business_name, s.email, s.status, s.created_at, COUNT(p.id) products FROM sellers s LEFT JOIN products p ON p.seller_id = s.id' . $sw . ' GROUP BY s.id ORDER BY s.id DESC LIMIT 500', $sp),
+            'users' => $ur, 'more' => $umore]);
 
     // ============================== ADMIN TEAM (separate from Users) ==============================
     case 'team_get':
@@ -473,6 +489,13 @@ switch ($action) {
         $m = oo_item_status($pdo, (int) $meAdmin['id'], (int) ($b['id'] ?? 0), (int) ($b['product_id'] ?? 0), (string) ($b['status'] ?? ''));
         if ($m !== '') fail($m, 409);
         out(['success' => true]);
+
+    case 'orders_bulk_status':
+        $ids = is_array($b['ids'] ?? null) ? $b['ids'] : [];
+        if (!in_array((string) ($b['status'] ?? ''), ['approved', 'shipped', 'delivered'], true)) fail('Choose approved, shipped or delivered.');
+        if (!$ids) fail('Select at least one order.');
+        [$okN, $skipN] = oo_bulk_status($pdo, (int) $meAdmin['id'], $ids, (string) $b['status']);
+        out(['success' => true, 'updated' => $okN, 'skipped' => $skipN]);
 
     case 'order_note_add':
         $oid = (int) ($b['id'] ?? 0);
@@ -520,8 +543,10 @@ switch ($action) {
         out(['success' => true]);
 
     case 'user_delete':
-        $pdo->prepare('DELETE FROM users WHERE id = ?')->execute([(int) ($b['id'] ?? 0)]);
-        out(['success' => true]);
+        require_once __DIR__ . '/../includes/user_remove.php';
+        $r = user_remove($pdo, (int) ($b['id'] ?? 0));
+        if ($r['mode'] === 'missing') fail($r['message'], 404);
+        out(['success' => true, 'mode' => $r['mode'], 'message' => $r['message']]);
 
     // ============================== SELLERS ==============================
     case 'sellers_full':

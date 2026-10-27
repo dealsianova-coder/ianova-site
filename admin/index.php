@@ -60,6 +60,11 @@ $attn = [
     ['💬', 'Unread seller messages', $unreadMsgs, 'seller_messages.php'],
     ['🔔', 'Unread alerts', $alerts, 'notifications.php'],
     ['⚠️', 'Low stock (3 or less)', $lowStock, 'products.php'],
+    ['⏰', 'Orders waiting over 24 hours', (int) ((require_once __DIR__ . '/../includes/attention.php') ? ($at_ = attn_counts($pdo))['old_pending'] : 0), 'orders.php?status=pending'],
+    ['🚚', 'Shipped over 7 days, not delivered', (int) $at_['stuck_shipped'], 'orders.php?status=shipped'],
+    ['💳', 'Orders with a balance to collect', (int) $at_['to_collect'], 'payments.php'],
+    ['💸', 'Sellers waiting for a payout', (int) $at_['payouts_due'], 'payouts.php'],
+    ['💾', 'No backup in the last 3 days', (int) $at_['backup_old'], 'index.php'],
 ];
 $attnTotal = 0; foreach ($attn as $a0) $attnTotal += (int) $a0[2];
 $stLabel = ['approved' => 'Approved', 'pending' => 'Review', 'rejected' => 'Rejected', 'hidden' => 'Hidden'];

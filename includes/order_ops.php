@@ -6,7 +6,7 @@ function oo_ensure(PDO $pdo): void {
     static $done = false;
     if ($done) return;
     $done = true;
-    if (function_exists('ops_setting') && ops_setting($pdo, 'schema_oo', '') === '2') return;
+    if (function_exists('ops_setting') && ops_setting($pdo, 'schema_oo', '') === '3') return;
     try {
         $pdo->exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_courier VARCHAR(60) NOT NULL DEFAULT ''");
         $pdo->exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_no VARCHAR(80) NOT NULL DEFAULT ''");
@@ -14,7 +14,8 @@ function oo_ensure(PDO $pdo): void {
         $pdo->exec("CREATE TABLE IF NOT EXISTS order_refunds (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, amount DECIMAL(12,2) NOT NULL, reason VARCHAR(200) NOT NULL DEFAULT '', method VARCHAR(40) NOT NULL DEFAULT '', admin_id INT NOT NULL DEFAULT 0, admin_name VARCHAR(120) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (order_id)) ENGINE=InnoDB");
         $pdo->exec("CREATE TABLE IF NOT EXISTS order_notes (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, admin_id INT NOT NULL, admin_name VARCHAR(120) NOT NULL DEFAULT '', note TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (order_id)) ENGINE=InnoDB");
         $pdo->exec("ALTER TABLE order_items ADD COLUMN IF NOT EXISTS item_status VARCHAR(12) NOT NULL DEFAULT ''");
-        if (function_exists('ops_setting_set')) ops_setting_set($pdo, 'schema_oo', '2');
+        $pdo->exec("CREATE TABLE IF NOT EXISTS order_events (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, status VARCHAR(20) NOT NULL, admin_id INT NOT NULL DEFAULT 0, admin_name VARCHAR(120) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (order_id)) ENGINE=InnoDB");
+        if (function_exists('ops_setting_set')) ops_setting_set($pdo, 'schema_oo', '3');
     } catch (Throwable $e) {
     }
 }
@@ -170,5 +171,76 @@ function oo_item_status(PDO $pdo, int $adminId, int $orderId, int $productId, st
     if ($name === false) return 'That item is not in this order.';
     $pdo->prepare('UPDATE order_items SET item_status = ? WHERE order_id = ? AND product_id = ?')->execute([$status, $orderId, $productId]);
     oo_note($pdo, $adminId, $orderId, 'Item "' . $name . '" ' . ($status === '' ? 'status cleared.' : 'marked ' . $status . '.'));
+    oo_item_advance($pdo, $adminId, $orderId);
     return '';
+}
+
+/** When every item is shipped (or delivered) the order moves to Shipped; when every item is delivered, to Delivered. Only moves forward. */
+function oo_item_advance(PDO $pdo, int $adminId, int $orderId): void {
+    $q = $pdo->prepare('SELECT status FROM orders WHERE id = ?'); $q->execute([$orderId]);
+    $cur = (string) $q->fetchColumn();
+    $rank = ['approved' => 1, 'paid' => 2, 'shipped' => 3, 'delivered' => 4];
+    if (!isset($rank[$cur])) return;
+    $c = $pdo->prepare("SELECT COUNT(*), SUM(item_status = 'delivered'), SUM(item_status IN ('shipped', 'delivered')) FROM order_items WHERE order_id = ?");
+    $c->execute([$orderId]);
+    [$all, $del, $shp] = array_map('intval', $c->fetch(PDO::FETCH_NUM));
+    if ($all < 1) return;
+    $target = $del === $all ? 'delivered' : ($shp === $all ? 'shipped' : '');
+    if ($target === '' || $rank[$target] <= $rank[$cur]) return;
+    require_once __DIR__ . '/seller_orders.php';
+    if (set_order_status($pdo, $orderId, $target) === '') oo_note($pdo, $adminId, $orderId, 'All items are ' . $target . ', so the order was marked ' . $target . '.');
+}
+
+/** Remember an order status change (who and when). No table changes here: this runs inside the status change itself. */
+function oo_event(PDO $pdo, int $orderId, string $status): void {
+    try {
+        $aid = (int) ($GLOBALS['ORDER_ACTOR_ID'] ?? ($_SESSION['admin_id'] ?? 0));
+        $name = $aid > 0 ? oo_admin_name($pdo, $aid) : '';
+        $pdo->prepare('INSERT INTO order_events (order_id, status, admin_id, admin_name) VALUES (?, ?, ?, ?)')->execute([$orderId, $status, $aid, $name]);
+    } catch (Throwable $e) {
+    }
+}
+
+/** The story of one order, oldest first: placed, status changes, payments, refunds and notes. */
+function oo_timeline(PDO $pdo, int $orderId): array {
+    oo_ensure($pdo);
+    $out = [];
+    $one = function (string $sql) use ($pdo, $orderId): array {
+        try { $q = $pdo->prepare($sql); $q->execute([$orderId]); return $q->fetchAll(PDO::FETCH_ASSOC); } catch (Throwable $e) { return []; }
+    };
+    foreach ($one('SELECT created_at FROM orders WHERE id = ?') as $r) $out[] = ['at' => (string) $r['created_at'], 'icon' => '🛒', 'title' => 'Order placed', 'detail' => '', 'by' => ''];
+    $ic = ['pending' => '⏳', 'approved' => '✅', 'paid' => '💰', 'shipped' => '🚚', 'delivered' => '📦', 'cancelled' => '⛔'];
+    foreach ($one('SELECT status, admin_name, created_at FROM order_events WHERE order_id = ?') as $r) $out[] = ['at' => (string) $r['created_at'], 'icon' => $ic[$r['status']] ?? '🔄', 'title' => 'Status: ' . ucfirst((string) $r['status']), 'detail' => '', 'by' => (string) $r['admin_name']];
+    foreach ($one('SELECT amount, method, reference, admin_name, created_at FROM order_payments WHERE order_id = ?') as $r) $out[] = ['at' => (string) $r['created_at'], 'icon' => '💳', 'title' => 'Payment received ' . number_format((float) $r['amount'], 2), 'detail' => trim($r['method'] . ' ' . $r['reference']), 'by' => (string) $r['admin_name']];
+    foreach ($one('SELECT amount, reason, method, admin_name, created_at FROM order_refunds WHERE order_id = ?') as $r) $out[] = ['at' => (string) $r['created_at'], 'icon' => '↩️', 'title' => 'Refund ' . number_format((float) $r['amount'], 2), 'detail' => trim($r['method'] . ' ' . $r['reason']), 'by' => (string) $r['admin_name']];
+    foreach ($one('SELECT note, admin_name, created_at FROM order_notes WHERE order_id = ?') as $r) $out[] = ['at' => (string) $r['created_at'], 'icon' => '📝', 'title' => (string) $r['note'], 'detail' => '', 'by' => (string) $r['admin_name']];
+    usort($out, fn($a, $b) => strcmp($a['at'], $b['at']));
+    return $out;
+}
+
+/** Move several orders forward in one go. Only forward to approved / shipped / delivered; cancelled orders and orders already past that step are skipped. Returns [updated, skipped]. */
+function oo_bulk_status(PDO $pdo, int $adminId, array $ids, string $target): array {
+    $rank = ['pending' => 0, 'approved' => 1, 'paid' => 2, 'shipped' => 3, 'delivered' => 4];
+    if (!in_array($target, ['approved', 'shipped', 'delivered'], true)) return [0, 0];
+    $GLOBALS['ORDER_ACTOR_ID'] = $adminId;
+    require_once __DIR__ . '/seller_orders.php';
+    $ids = array_slice(array_values(array_unique(array_filter(array_map('intval', $ids), fn($i) => $i > 0))), 0, 100);
+    $ok = 0; $skip = 0;
+    $q = $pdo->prepare('SELECT status FROM orders WHERE id = ?');
+    foreach ($ids as $id) {
+        $q->execute([$id]); $cur = $q->fetchColumn();
+        if ($cur === false || !isset($rank[$cur]) || $rank[$cur] >= $rank[$target]) { $skip++; continue; }
+        if (set_order_status($pdo, $id, $target) === '') $ok++; else $skip++;
+    }
+    return [$ok, $skip];
+}
+
+/** The customer's view of an order's story: placed, status changes, payments and refunds. No internal notes and no admin names. */
+function oo_customer_timeline(PDO $pdo, int $orderId): array {
+    $out = [];
+    foreach (oo_timeline($pdo, $orderId) as $e) {
+        if ($e['icon'] === '📝') continue;
+        $out[] = ['icon' => $e['icon'], 'title' => $e['title'], 'detail' => $e['detail'], 'at' => $e['at']];
+    }
+    return $out;
 }

@@ -164,7 +164,7 @@ function team_sections(): array {
         'analytics' => ['📈 Analytics', ['analytics.php']],
         'products' => ['📦 Products', ['products.php', 'product_view.php', 'product_edit.php', 'product_approve.php', 'product_delete.php', 'product_hide.php', 'product_unhide.php', 'products_bulk.php', 'products_bulk_template.php']],
         'categories' => ['🏷️ Categories', ['categories.php']],
-        'orders' => ['🛒 Orders', ['orders.php', 'order_view.php', 'order_item.php', 'order_note.php', 'order_ops.php', 'invoice.php', 'export_orders.php']],
+        'orders' => ['🛒 Orders', ['orders.php', 'orders_bulk.php', 'order_view.php', 'order_item.php', 'order_note.php', 'order_ops.php', 'invoice.php', 'export_orders.php']],
         'users' => ['👥 Users (sellers & customers)', ['users.php']],
         'sellers' => ['🏪 Sellers', ['sellers.php', 'seller_messages.php']],
         'broadcast' => ['📢 Broadcast', ['broadcast.php']],
@@ -230,7 +230,7 @@ function team_section_of_action(string $file, string $a): ?string {
         if (isset($m[$a])) return $m[$a];
         return strpos($a, 'seller_') === 0 ? 'sellers' : null;
     }
-    $exact = ['dashboard' => 'dashboard', 'analytics' => 'analytics', 'orders_list' => 'orders', 'order_view' => 'orders', 'order_notes' => 'orders', 'order_note_add' => 'orders', 'order_tracking_save' => 'orders', 'order_refund_add' => 'orders', 'order_item_cancel' => 'orders', 'order_item_status' => 'orders', 'order_payment_add' => 'orders', 'order_payment_delete' => 'orders', 'bulk_import' => 'products',
+    $exact = ['dashboard' => 'dashboard', 'analytics' => 'analytics', 'orders_list' => 'orders', 'order_view' => 'orders', 'order_notes' => 'orders', 'order_note_add' => 'orders', 'order_tracking_save' => 'orders', 'order_refund_add' => 'orders', 'order_item_cancel' => 'orders', 'order_item_status' => 'orders', 'orders_bulk_status' => 'orders', 'order_payment_add' => 'orders', 'order_payment_delete' => 'orders', 'bulk_import' => 'products',
         'users_list' => 'users', 'user_save' => 'users', 'user_delete' => 'users', 'sellers_full' => 'sellers', 'seller_action' => 'sellers', 'auto_master' => 'sellers',
         'subscribers_list' => 'subscribers', 'subscriber_delete' => 'subscribers', 'suggestions_list' => 'suggestions', 'suggestion_reviewed' => 'suggestions',
         'alerts_tab' => 'alerts', 'alerts_tab_read' => 'alerts', 'settings_get' => 'settings', 'settings_set' => 'settings'];

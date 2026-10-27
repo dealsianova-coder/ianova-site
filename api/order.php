@@ -28,4 +28,10 @@ $order['subtotal'] = $subtotal;
 $order['delivery'] = round((float) $order['total'] - $subtotal + (float) ($order['discount'] ?? 0), 2);
 require_once __DIR__ . '/../includes/payments.php';
 $order += pay_order_fields($pdo, $id);
+try {
+    $tq_ = $pdo->prepare('SELECT tracking_courier, tracking_no, tracking_note FROM orders WHERE id = ?'); $tq_->execute([$id]);
+    $tr_ = $tq_->fetch(PDO::FETCH_ASSOC) ?: [];
+    $order['tracking_courier'] = (string) ($tr_['tracking_courier'] ?? ''); $order['tracking_no'] = (string) ($tr_['tracking_no'] ?? ''); $order['tracking_note'] = (string) ($tr_['tracking_note'] ?? '');
+    $order['timeline'] = oo_customer_timeline($pdo, $id);
+} catch (Throwable $e_) { }
 out(['success' => true, 'order' => $order, 'items' => $items]);
