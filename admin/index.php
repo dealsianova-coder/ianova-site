@@ -67,9 +67,11 @@ $attn = [
     ['💾', 'No backup in the last 3 days', (int) $at_['backup_old'], 'index.php'],
 ];
 $attnTotal = 0; foreach ($attn as $a0) $attnTotal += (int) $a0[2];
+$tiles[5] = ['🔔', 'Needs attention', (int) $attnTotal, 'orders.php?status=pending', $attnTotal ? 'open orders' : 'all clear'];
 $stLabel = ['approved' => 'Approved', 'pending' => 'Review', 'rejected' => 'Rejected', 'hidden' => 'Hidden'];
 echo aou_css();
 ?>
+<link rel="stylesheet" href="../assets/css/admin-dash-gold.css?v=1">
 <style>
 html{scroll-behavior:smooth}
 .dnav{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:16px}.dnav a{flex:none;padding:8px 14px;border-radius:999px;background:#fff;border:1px solid #dce4df;font-weight:700;font-size:13px}.dnav a:hover{background:#1d6b52;color:#fff;border-color:#1d6b52}
@@ -86,6 +88,7 @@ html{scroll-behavior:smooth}
 
 <div class="dnav"><a href="#overview">Overview</a><a href="#orders">Orders</a><a href="#products">Products</a><a href="#categories">Categories</a><a href="#sellers">Sellers</a><a href="#users">Users</a></div>
 
+<a class="hero" href="orders.php"><div class="hb"><div class="hl">💰 Confirmed revenue</div><div class="hv"><?= CURRENCY . number_format($revenue, 2) ?></div><div class="hp"><span>🛒 <?= number_format($nOrders) ?> orders</span><span>⏳ <?= (int) $pendingOrders ?> pending</span><span><?= $attnTotal ? "👀 " . (int) $attnTotal . " to check" : "✅ all clear" ?></span></div></div></a>
 <div id="overview" class="tiles">
 <?php foreach ($tiles as $t): ?>
   <a class="tile" href="<?= $t[3] ?>"><div class="ic"><?= $t[0] ?></div><div class="lb"><?= admin_h($t[1]) ?></div><div class="vl"><?= is_int($t[2]) ? number_format($t[2]) : $t[2] ?></div><?php if ($t[4] !== ''): ?><span class="sb"><?= admin_h($t[4]) ?></span><?php endif; ?></a>
@@ -93,7 +96,7 @@ html{scroll-behavior:smooth}
 </div>
 
 <div class="attn">
-  <h2><?= $attnTotal ? '👀 Needs your attention' : '✅ All caught up' ?></h2>
+  <h2><?= $attnTotal ? '👀 Needs your attention' : '✅ All caught up' ?><?php if ($attnTotal): ?><em><?= (int) $attnTotal ?></em><?php endif; ?></h2>
   <div class="agrid"><?php foreach ($attn as $a0): ?><a class="ai<?= $a0[2] ? ' hot' : '' ?>" href="<?= $a0[3] ?>"><span><?= $a0[0] ?></span><span><?= admin_h($a0[1]) ?></span><b><?= (int) $a0[2] ?></b></a><?php endforeach; ?></div>
 </div>
 

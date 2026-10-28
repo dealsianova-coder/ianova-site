@@ -1,0 +1,26 @@
+/* IANOVA admin dashboard: logo colours (black + gold) */
+:root{--g1:#9c600c;--g2:#e4b43c;--g3:#f2c94c;--gt:#fff6dc;--bk:#16130c;--gg:linear-gradient(135deg,#9c600c,#e4b43c 55%,#f2c94c);--bg2:linear-gradient(135deg,#0d0b07,#2a2417)}
+.hero{border-radius:20px;overflow:hidden;background:var(--bg2);box-shadow:0 8px 22px rgba(0,0,0,.18);margin-bottom:16px;display:block;color:#fff}
+.hero:before{content:"";display:block;height:4px;background:var(--gg)}
+.hero .hb{padding:18px 22px 20px}
+.hero .hl{color:#d9b45a;font-size:12px;letter-spacing:1.2px;font-weight:800;text-transform:uppercase}
+.hero .hv{font-size:38px;font-weight:900;margin:6px 0 12px;background:var(--gg);-webkit-background-clip:text;background-clip:text;color:transparent;word-break:break-word}
+.hero .hp{display:flex;gap:8px;flex-wrap:wrap}.hero .hp span{padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(228,180,60,.45);color:#f6e3a6;font-size:12px;font-weight:800}
+.tile{position:relative;overflow:hidden;padding-top:19px}
+.tile:before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--gg)}
+.tile:hover{border-color:var(--g2);box-shadow:0 6px 18px rgba(156,96,12,.16)}
+.tile .ic{display:inline-flex;width:38px;height:38px;border-radius:50%;background:var(--gt);align-items:center;justify-content:center;font-size:19px}
+.tile .vl{color:#17231e}
+.tile .sb{background:var(--gg);color:var(--bk);font-weight:900}
+.attn{padding:0;overflow:hidden}
+.attn h2{margin:0;padding:14px 18px;background:var(--bg2);color:#fff;font-size:17px;display:flex;justify-content:space-between;align-items:center}
+.attn h2 em{font-style:normal;background:var(--gg);color:var(--bk);border-radius:999px;padding:2px 11px;font-size:14px;font-weight:900}
+.attn .agrid{padding:14px}
+.ai{border-left:4px solid transparent;color:#6b7973}
+.ai.hot{background:var(--gt);border-left-color:var(--g2);color:#17231e;font-weight:700}
+.ai b{min-width:30px;text-align:center;padding:2px 9px;border-radius:999px;background:#eef1f0;font-size:15px}
+.ai.hot b{background:var(--gg);color:var(--bk)}
+.dnav a:hover{background:var(--bk);border-color:var(--bk);color:var(--g3)}
+.bar i{background:var(--gg)}
+html.dm .hero,html.dm .attn h2,html.dm .tile .sb,html.dm .ai.hot b,html.dm .attn h2 em{filter:invert(1) hue-rotate(180deg)}
+@media(max-width:600px){.hero .hv{font-size:30px}}
