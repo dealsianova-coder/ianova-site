@@ -5,11 +5,13 @@ function analytics_trend(float $now, float $before): ?float {
     return round(($now - $before) / $before * 100, 1);
 }
 
+require_once __DIR__ . '/revenue.php';
+
 function analytics_data(PDO $pdo, int $months = 6): array {
     $months = $months === 12 ? 12 : 6;
     $one = function (string $sql, array $par = []) use ($pdo) { try { $q = $pdo->prepare($sql); $q->execute($par); $v = $q->fetchColumn(); return $v === false || $v === null ? 0 : $v; } catch (Throwable $e) { return 0; } };
     $rows = function (string $sql, array $par = []) use ($pdo) { try { $q = $pdo->prepare($sql); $q->execute($par); return $q->fetchAll(PDO::FETCH_ASSOC); } catch (Throwable $e) { return []; } };
-    $ok = "status <> 'cancelled'";
+    $ok = "status <> 'cancelled'" . (rv_since($pdo) !== '' ? ' AND created_at >= ' . $pdo->quote(rv_since($pdo)) : '');
 
     $rev = (float) $one("SELECT COALESCE(SUM(total),0) FROM orders WHERE $ok");
     $rev -= (float) $one('SELECT COALESCE(SUM(amount),0) FROM order_refunds'); // refunds paid back to customers

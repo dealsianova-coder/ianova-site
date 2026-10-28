@@ -16,6 +16,7 @@ require_once __DIR__ . '/../includes/order_ops.php';
 require_once __DIR__ . '/../includes/coupons.php';
 require_once __DIR__ . '/../includes/payouts.php';
 require_once __DIR__ . '/../includes/payments.php';
+require_once __DIR__ . '/../includes/revenue.php';
 team_ensure($pdo);
 oo_ensure($pdo);
 date_default_timezone_set('Africa/Nairobi');
@@ -125,7 +126,7 @@ switch ($action) {
             'orders' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM orders'),
             'users' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM users'),
             'sellers' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM sellers'),
-            'revenue' => (float) apx_val($pdo, "SELECT COALESCE(SUM(total),0) FROM orders WHERE status IN ('paid','shipped','delivered')"),
+            'revenue' => rv_total($pdo),
             'pending_orders' => (int) apx_val($pdo, "SELECT COUNT(*) FROM orders WHERE status = 'pending'"),
             'review_products' => (int) apx_val($pdo, "SELECT COUNT(*) FROM products WHERE status = 'pending'"),
             'low_stock' => (int) apx_val($pdo, "SELECT COUNT(*) FROM products WHERE status = 'approved' AND stock <= 3"),
@@ -177,7 +178,7 @@ switch ($action) {
         unset($s0);
         $users = apx_rows($pdo, 'SELECT id, name, email FROM users ORDER BY id DESC LIMIT 5');
         // Sales chart + trends (this 7 days vs the 7 before) + latest orders of every kind
-        $rev = "status IN ('paid','shipped','delivered')";
+        $rev = "status IN ('paid','shipped','delivered')" . (rv_since($pdo) !== '' ? ' AND created_at >= ' . $pdo->quote(rv_since($pdo)) : '');
         $sales = ['7' => [], '30' => []];
         try {
             $byDay = [];
@@ -532,6 +533,35 @@ switch ($action) {
         if ($oid < 1 || $note === '') fail('Write a note first.');
         $pdo->exec("CREATE TABLE IF NOT EXISTS order_notes (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, admin_id INT NOT NULL, admin_name VARCHAR(120) NOT NULL DEFAULT '', note TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (order_id)) ENGINE=InnoDB");
         $pdo->prepare('INSERT INTO order_notes (order_id, admin_id, admin_name, note) SELECT ?, id, name, ? FROM admins WHERE id = ?')->execute([$oid, mb_substr($note, 0, 1000), (int) $meAdmin['id']]);
+        out(['success' => true]);
+
+    // ============================== REVENUE ==============================
+    case 'revenue_report':
+        $isM = team_is_master($pdo, (int) $meAdmin['id']);
+        $rep = rv_report($pdo, (string) ($_GET['from'] ?? $b['from'] ?? ''), (string) ($_GET['to'] ?? $b['to'] ?? ''));
+        out(['success' => true, 'master' => $isM, 'has_security' => team_has_security($pdo, (int) $meAdmin['id']), 'report' => $rep,
+             'resets' => $isM ? rv_resets($pdo) : [], 'trash' => $isM ? rv_trash_list($pdo) : [], 'orders_now' => rv_order_counts($pdo), 'hold_days' => RV_HOLD_DAYS]);
+
+    case 'revenue_reset_do':
+    case 'revenue_restore_do':
+    case 'revenue_trash_do':
+    case 'revenue_trash_restore_do':
+        if (!team_is_master($pdo, (int) $meAdmin['id'])) fail('Only the master admin can do this.', 403);
+        $m = team_verify($pdo, (int) $meAdmin['id'], (string) ($b['security_password'] ?? ''));
+        if ($m !== '') fail($m, 403);
+        $who = (string) $pdo->query('SELECT name FROM admins WHERE id = ' . (int) $meAdmin['id'])->fetchColumn();
+        if ($action === 'revenue_reset_do') {
+            if (strtoupper(trim((string) ($b['confirm'] ?? ''))) !== 'RESET') fail('Type RESET to confirm.');
+            $m = rv_reset($pdo, (int) $meAdmin['id'], $who, (string) ($b['label'] ?? ''));
+        } elseif ($action === 'revenue_restore_do') {
+            $m = rv_restore($pdo, (int) ($b['id'] ?? 0));
+        } elseif ($action === 'revenue_trash_do') {
+            if (strtoupper(trim((string) ($b['confirm'] ?? ''))) !== 'DELETE') fail('Type DELETE to confirm.');
+            $m = rv_trash_all($pdo, (int) $meAdmin['id'], $who);
+        } else {
+            $m = rv_trash_restore($pdo, (int) ($b['id'] ?? 0));
+        }
+        if ($m !== '') fail($m);
         out(['success' => true]);
 
     case 'team_idle_set':

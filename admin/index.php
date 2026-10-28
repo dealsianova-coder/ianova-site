@@ -12,7 +12,7 @@ $nCats = (int) dsh_val($pdo, 'SELECT COUNT(*) FROM categories');
 $nOrders = (int) dsh_val($pdo, 'SELECT COUNT(*) FROM orders');
 $nUsers = (int) dsh_val($pdo, 'SELECT COUNT(*) FROM users');
 $nSellers = (int) dsh_val($pdo, 'SELECT COUNT(*) FROM sellers');
-$revenue = (float) dsh_val($pdo, "SELECT COALESCE(SUM(total),0) FROM orders WHERE status IN ('paid','shipped','delivered')");
+require_once __DIR__ . '/../includes/revenue.php'; $revenue = rv_total($pdo);
 $pendingOrders = (int) dsh_val($pdo, "SELECT COUNT(*) FROM orders WHERE status = 'pending'");
 $reviewProducts = (int) dsh_val($pdo, "SELECT COUNT(*) FROM products WHERE status = 'pending'");
 $lowStock = (int) dsh_val($pdo, "SELECT COUNT(*) FROM products WHERE status = 'approved' AND stock <= 3");
@@ -71,7 +71,7 @@ $tiles[5] = ['🔔', 'Needs attention', (int) $attnTotal, 'orders.php?status=pen
 $stLabel = ['approved' => 'Approved', 'pending' => 'Review', 'rejected' => 'Rejected', 'hidden' => 'Hidden'];
 echo aou_css();
 ?>
-<link rel="stylesheet" href="../assets/css/admin-dash-gold.css?v=2">
+<link rel="stylesheet" href="../assets/css/admin-dash-gold.css?v=3">
 <style>
 html{scroll-behavior:smooth}
 .dnav{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:16px}.dnav a{flex:none;padding:8px 14px;border-radius:999px;background:#fff;border:1px solid #dce4df;font-weight:700;font-size:13px}.dnav a:hover{background:#1d6b52;color:#fff;border-color:#1d6b52}
@@ -89,7 +89,7 @@ html{scroll-behavior:smooth}
 <div class="dnav"><a href="#overview">Overview</a><a href="#orders">Orders</a><a href="#products">Products</a><a href="#categories">Categories</a><a href="#sellers">Sellers</a><a href="#users">Users</a></div>
 
 <?php /* iad-v2: dashboard example layout */
-$iad_rev = "status IN ('paid','shipped','delivered')";
+$iad_rev = "status IN ('paid','shipped','delivered')" . (function_exists('rv_since') && rv_since($pdo) !== '' ? ' AND created_at >= ' . $pdo->quote(rv_since($pdo)) : '');
 $iad_by = []; foreach (dsh_rows($pdo, "SELECT DATE(created_at) d, COALESCE(SUM(total),0) t FROM orders WHERE $iad_rev AND created_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY) GROUP BY DATE(created_at)") as $r0) $iad_by[$r0['d']] = (float) $r0['t'];
 $iad_s = ['7' => [], '30' => []];
 for ($i = 29; $i >= 0; $i--) { $d = date('Y-m-d', strtotime("-$i day")); $pt = [date('d/m', strtotime($d)), $iad_by[$d] ?? 0.0]; $iad_s['30'][] = $pt; if ($i < 7) $iad_s['7'][] = $pt; }
@@ -100,7 +100,7 @@ $iad_tr = function (string $tbl, string $sum = 'COUNT(*)', string $w = '1=1') us
     return round(($a - $b) / $b * 100, 1);
 };
 $iad_k = [
-    ['k1', '💰', 'Total Revenue', CURRENCY . number_format($revenue, 2), $iad_tr('orders', 'SUM(total)', $iad_rev), 'orders.php'],
+    ['k1', '💰', 'Total Revenue', CURRENCY . number_format($revenue, 2), $iad_tr('orders', 'SUM(total)', $iad_rev), 'revenue.php'],
     ['k2', '🛒', 'Total Orders', number_format((int) $nOrders), $iad_tr('orders'), 'orders.php'],
     ['k3', '📦', 'Total Products', number_format((int) $nProducts), $iad_tr('products'), 'products.php'],
     ['k4', '👥', 'Total Customers', number_format((int) $nUsers), $iad_tr('users'), 'users.php'],
