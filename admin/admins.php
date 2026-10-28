@@ -27,6 +27,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($kind === 'team_perms') {
         $m = team_set_perms($pdo, $meId, $id, $permsIn(), $sec);
         if ($m === '') $notice = 'Access updated.'; else $error = $m;
+    } elseif ($kind === 'idle') {
+        $m = team_idle_set($pdo, $meId, (int) ($_POST['minutes'] ?? -1), $sec);
+        if ($m === '') $notice = 'Saved.'; else $error = $m;
     } elseif ($kind === 'team_do') {
         $m = team_do($pdo, $meId, $id, (string) ($_POST['do'] ?? ''), $sec);
         if ($m === '') $notice = 'Done.'; else $error = $m;
@@ -104,6 +107,13 @@ if ($notice): ?><div class="notice"><?= admin_h($notice) ?></div><?php endif; if
     <button class="btn"><?= $iHaveSec ? 'Change security password' : 'Set security password' ?></button></form>
   <?php if ($iHaveSec): ?><form method="post" style="margin-top:10px"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>"><input type="hidden" name="kind" value="sec_forgot"><button class="btn gray">Forgot it? Email me a reset link</button></form><?php endif; ?></div>
 <?php if ($iAmMaster): ?>
+<div class="tm-panel" style="grid-column:1/-1"><strong>⏱️ Automatic sign-out</strong>
+  <p class="muted" style="margin:6px 0 10px">Admins are signed out (website and Admin app) after this long without activity. Applies to every admin.</p>
+  <?php if (!$iHaveSec): ?><p class="muted">Set your security password above first.</p><?php else: ?>
+  <form method="post" class="f" style="display:grid;gap:10px;max-width:640px"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>"><input type="hidden" name="kind" value="idle">
+    <select name="minutes"><?php foreach (team_idle_choices() as $k => $lab): ?><option value="<?= (int) $k ?>"<?= $k === team_idle_minutes($pdo) ? ' selected' : '' ?>><?= admin_h($lab) ?></option><?php endforeach; ?></select>
+    <input type="password" name="security" required autocomplete="off" placeholder="🔒 Your security password">
+    <button class="btn">Save</button></form><?php endif; ?></div>
 <div class="tm-panel" style="grid-column:1/-1"><strong>➕ Add another admin</strong>
   <p class="muted" style="margin:6px 0 10px">The new admin is created as <b>pending</b> and cannot sign in until you approve them. Give them their own sign-in password.</p>
   <?php if (!$iHaveSec): ?><p class="muted">Set your security password above first.</p><?php else: ?>

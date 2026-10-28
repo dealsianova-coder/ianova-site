@@ -6,6 +6,10 @@ if (empty($_SESSION['admin_id'])) {
 }
 require_once __DIR__ . '/../../includes/admin_team.php';
 if (isset($pdo) && team_login_block($pdo, ['id' => (int) $_SESSION['admin_id']]) !== '') { unset($_SESSION['admin_id']); header('Location: login.php'); exit; }
+if (isset($pdo) && ($idleMin_ = team_idle_minutes($pdo)) > 0) {   // automatic sign-out after inactivity
+    if (!empty($_SESSION['admin_last']) && time() - (int) $_SESSION['admin_last'] > $idleMin_ * 60) { unset($_SESSION['admin_id'], $_SESSION['admin_name'], $_SESSION['admin_last']); header('Location: login.php'); exit; }
+    $_SESSION['admin_last'] = time();
+}
 team_page_guard($pdo, (int) $_SESSION['admin_id']); // what this admin may see
 function admin_h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 function admin_csrf() {

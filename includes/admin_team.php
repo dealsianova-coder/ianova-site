@@ -8,7 +8,7 @@ function team_ensure(PDO $pdo): void {
     $done = true;
     try {
         // the table changes below only need to run once (remembered in ops_settings)
-        $have = function_exists('ops_setting') && ops_setting($pdo, 'schema_team', '') === '4';
+        $have = function_exists('ops_setting') && ops_setting($pdo, 'schema_team', '') === '5';
         if (!$have) {
             $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS status VARCHAR(12) NOT NULL DEFAULT 'active'");
             $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_master TINYINT NOT NULL DEFAULT 0");
@@ -18,12 +18,14 @@ function team_ensure(PDO $pdo): void {
             $pdo->exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS twofa TINYINT NOT NULL DEFAULT 0");
             $pdo->exec("CREATE TABLE IF NOT EXISTS admin_log (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, admin_name VARCHAR(120) NOT NULL DEFAULT '', action VARCHAR(60) NOT NULL, detail VARCHAR(300) NOT NULL DEFAULT '', ip VARCHAR(45) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (created_at), KEY (admin_id)) ENGINE=InnoDB");
             $pdo->exec("CREATE TABLE IF NOT EXISTS admin_sec_reset (admin_id INT PRIMARY KEY, token_hash CHAR(64) NOT NULL, expires_at DATETIME NOT NULL, requested_at DATETIME NOT NULL) ENGINE=InnoDB");
+            $pdo->exec("CREATE TABLE IF NOT EXISTS admin_tokens (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, token_hash CHAR(64) NOT NULL UNIQUE, expires_at DATETIME NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB");
+            $pdo->exec("ALTER TABLE admin_tokens ADD COLUMN IF NOT EXISTS last_used DATETIME NULL");
             $pdo->exec("CREATE TABLE IF NOT EXISTS admin_sec_fail (admin_id INT PRIMARY KEY, fails INT NOT NULL DEFAULT 0, until_at DATETIME NULL) ENGINE=InnoDB");
         }
         if (!(int) $pdo->query('SELECT COUNT(*) FROM admins WHERE is_master = 1')->fetchColumn()) {
             $pdo->exec('UPDATE admins SET is_master = 1 WHERE id = (SELECT m FROM (SELECT MIN(id) m FROM admins) x)');
         }
-        if (!$have && function_exists('ops_setting_set')) ops_setting_set($pdo, 'schema_team', '4');
+        if (!$have && function_exists('ops_setting_set')) ops_setting_set($pdo, 'schema_team', '5');
     } catch (Throwable $e) { /* older MariaDB: columns may already exist */ }
 }
 
@@ -390,4 +392,47 @@ function team_otp_verify_challenge(PDO $pdo, string $challenge, string $code) {
     if ($m !== '') return $m;
     $a = $pdo->prepare('SELECT id, name, email FROM admins WHERE id = ?'); $a->execute([$id]);
     return $a->fetch(PDO::FETCH_ASSOC) ?: 'Admin not found.';
+}
+
+// ---------------------------------------------------------------- automatic sign-out after inactivity
+/** minutes => label. 0 means no inactivity limit (a sign-in still lasts at most 30 days). */
+function team_idle_choices(): array {
+    return [5 => '5 minutes', 15 => '15 minutes', 30 => '30 minutes', 60 => '1 hour', 240 => '4 hours', 1440 => '24 hours', 0 => 'Never (only after 30 days)'];
+}
+
+function team_idle_minutes(PDO $pdo): int {
+    if (!function_exists('ops_setting')) return 60;
+    $v = (int) ops_setting($pdo, 'admin_idle_min', '60');
+    return array_key_exists($v, team_idle_choices()) ? $v : 60;
+}
+
+/** Master only, protected by the security password. '' = saved, otherwise the message to show. */
+function team_idle_set(PDO $pdo, int $masterId, int $minutes, string $security): string {
+    if (!team_is_master($pdo, $masterId)) return 'Only the master admin can change this.';
+    $m = team_verify($pdo, $masterId, $security);
+    if ($m !== '') return $m;
+    if (!array_key_exists($minutes, team_idle_choices())) return 'Choose one of the options.';
+    ops_setting_set($pdo, 'admin_idle_min', (string) $minutes);
+    team_log($pdo, $masterId, 'admin_idle', 'sign out after ' . team_idle_choices()[$minutes]);
+    return '';
+}
+
+/** Admin app / API sessions: false when the sign-in has been idle too long (the sign-in is then removed). Counts every request as activity. */
+function team_token_active(PDO $pdo, string $tokenHash): bool {
+    try {
+        team_ensure($pdo);
+        $q = $pdo->prepare('SELECT TIMESTAMPDIFF(SECOND, COALESCE(last_used, created_at), NOW()) idle FROM admin_tokens WHERE token_hash = ?');
+        $q->execute([$tokenHash]);
+        $idle = $q->fetchColumn();
+        if ($idle === false) return true;                       // handled by the normal token check
+        $min = team_idle_minutes($pdo);
+        if ($min > 0 && (int) $idle > $min * 60) {
+            $pdo->prepare('DELETE FROM admin_tokens WHERE token_hash = ?')->execute([$tokenHash]);
+            return false;
+        }
+        if ((int) $idle > 30) $pdo->prepare('UPDATE admin_tokens SET last_used = NOW() WHERE token_hash = ?')->execute([$tokenHash]);
+    } catch (Throwable $e) {
+        return true;                                            // never lock everyone out because of a database hiccup
+    }
+    return true;
 }

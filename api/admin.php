@@ -30,6 +30,7 @@ if ($token === '') fail('Please sign in as admin.', 401);
 $s = $pdo->prepare('SELECT a.id, a.name FROM admin_tokens t JOIN admins a ON a.id = t.admin_id WHERE t.token_hash = ? AND t.expires_at > NOW() LIMIT 1');
 $s->execute([hash('sha256', $token)]);
 $__adm = $s->fetch();
+if ($__adm) { require_once __DIR__ . '/../includes/admin_team.php'; if (!team_token_active($pdo, hash('sha256', $token))) fail('You were signed out after being inactive. Please sign in again.', 401); }
 if (!$__adm) fail('Admin session expired. Please sign in again.', 401);
 require_once __DIR__ . '/../includes/admin_team.php';
 $__sec = team_section_of_action('admin', (string) $action);

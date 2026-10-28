@@ -27,6 +27,7 @@ if ($token === '') fail('Please sign in as admin.', 401);
 $st0 = $pdo->prepare('SELECT a.id FROM admin_tokens t JOIN admins a ON a.id = t.admin_id WHERE t.token_hash = ? AND t.expires_at > NOW() AND a.status = \'active\' LIMIT 1');
 $st0->execute([hash('sha256', $token)]);
 $meAdmin = $st0->fetch(PDO::FETCH_ASSOC);
+if ($meAdmin && !team_token_active($pdo, hash('sha256', $token))) fail('You were signed out after being inactive. Please sign in again.', 401);
 if ($meAdmin) $GLOBALS['ORDER_ACTOR_ID'] = (int) $meAdmin['id'];
 if (!$meAdmin) fail('Admin session expired. Please sign in again.', 401);
 
@@ -109,7 +110,7 @@ $img = image_column($pdo);
 $__sec = team_section_of_action('panel', (string) $action);
 if ($__sec !== null && !team_can($pdo, (int) $meAdmin['id'], $__sec)) fail('You do not have access to this section. Ask the master admin.', 403);
 
-if (preg_match('/(_save|_delete|_action|_toggle|_status|_set|_send|_import|_flush|_clear|_add|_do|_perms|_reviewed|_read)$|^(auto_master|bulk_import|mail_test|mail_newsletter|order_note_add|order_item_cancel|payout_rate)$/', (string) $action) && !in_array($action, ['alerts_tab_read', 'team_do', 'team_add', 'team_perms', 'team_set_security', 'admin_account_save', 'order_tracking_save', 'order_refund_add', 'order_item_cancel'], true)) {
+if (preg_match('/(_save|_delete|_action|_toggle|_status|_set|_send|_import|_flush|_clear|_add|_do|_perms|_reviewed|_read)$|^(auto_master|bulk_import|mail_test|mail_newsletter|order_note_add|order_item_cancel|payout_rate)$/', (string) $action) && !in_array($action, ['alerts_tab_read', 'team_do', 'team_add', 'team_perms', 'team_set_security', 'admin_account_save', 'team_idle_set', 'order_tracking_save', 'order_refund_add', 'order_item_cancel'], true)) {
     $__d = []; foreach (['id', 'status', 'do', 'name', 'key'] as $__k) if (isset($b[$__k]) && is_scalar($b[$__k])) $__d[] = $__k . '=' . substr((string) $b[$__k], 0, 40);
     team_log($pdo, (int) $meAdmin['id'], (string) $action, implode(' ', $__d));
 }
@@ -454,7 +455,7 @@ switch ($action) {
         $rows = team_list($pdo);
         if (!$isM) $rows = array_values(array_filter($rows, fn($r) => (int) $r['id'] === $meId || (int) $r['is_master'] === 1));
         $secs = []; foreach (team_sections() as $k => $d) $secs[] = ['key' => $k, 'label' => $d[0]];
-        out(['success' => true, 'me' => $meId, 'master' => $isM, 'has_security' => team_has_security($pdo, $meId), 'admins' => $rows, 'sections' => $secs]);
+        out(['success' => true, 'me' => $meId, 'master' => $isM, 'has_security' => team_has_security($pdo, $meId), 'idle_min' => team_idle_minutes($pdo), 'idle_choices' => array_map(fn($k, $v) => ['min' => $k, 'label' => $v], array_keys(team_idle_choices()), array_values(team_idle_choices())), 'admins' => $rows, 'sections' => $secs]);
 
     case 'team_sec_reset_request':
         $m = team_sec_reset_request($pdo, (int) $meAdmin['id']);
@@ -503,6 +504,11 @@ switch ($action) {
         if ($oid < 1 || $note === '') fail('Write a note first.');
         $pdo->exec("CREATE TABLE IF NOT EXISTS order_notes (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, admin_id INT NOT NULL, admin_name VARCHAR(120) NOT NULL DEFAULT '', note TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY (order_id)) ENGINE=InnoDB");
         $pdo->prepare('INSERT INTO order_notes (order_id, admin_id, admin_name, note) SELECT ?, id, name, ? FROM admins WHERE id = ?')->execute([$oid, mb_substr($note, 0, 1000), (int) $meAdmin['id']]);
+        out(['success' => true]);
+
+    case 'team_idle_set':
+        $m = team_idle_set($pdo, (int) $meAdmin['id'], (int) ($b['minutes'] ?? -1), (string) ($b['security_password'] ?? ''));
+        if ($m !== '') fail($m, 403);
         out(['success' => true]);
 
     case 'team_perms':
