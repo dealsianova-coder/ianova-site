@@ -176,7 +176,35 @@ switch ($action) {
         foreach ($sellers as &$s0) { $c0 = $sCounts[(int) $s0['id']] ?? ['orders' => 0, 'waiting' => 0]; $s0['orders'] = (int) $c0['orders']; $s0['waiting'] = (int) $c0['waiting']; }
         unset($s0);
         $users = apx_rows($pdo, 'SELECT id, name, email FROM users ORDER BY id DESC LIMIT 5');
-        out(['success' => true, 'counts' => $counts,
+        // Sales chart + trends (this 7 days vs the 7 before) + latest orders of every kind
+        $rev = "status IN ('paid','shipped','delivered')";
+        $sales = ['7' => [], '30' => []];
+        try {
+            $byDay = [];
+            foreach (apx_rows($pdo, "SELECT DATE(created_at) d, COALESCE(SUM(total),0) t FROM orders WHERE $rev AND created_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY) GROUP BY DATE(created_at)") as $r0) $byDay[$r0['d']] = (float) $r0['t'];
+            for ($i = 29; $i >= 0; $i--) {
+                $d = date('Y-m-d', strtotime("-$i day"));
+                $pt = ['d' => $d, 'total' => $byDay[$d] ?? 0.0];
+                $sales['30'][] = $pt;
+                if ($i < 7) $sales['7'][] = $pt;
+            }
+        } catch (Throwable $e) { $sales = ['7' => [], '30' => []]; }
+        $trend = function (string $table, string $where = '1=1') use ($pdo) {
+            try {
+                $a = (float) apx_val($pdo, "SELECT COALESCE(" . ($table === 'orders_rev' ? 'SUM(total)' : 'COUNT(*)') . ",0) FROM " . ($table === 'orders_rev' ? 'orders' : $table) . " WHERE $where AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
+                $b = (float) apx_val($pdo, "SELECT COALESCE(" . ($table === 'orders_rev' ? 'SUM(total)' : 'COUNT(*)') . ",0) FROM " . ($table === 'orders_rev' ? 'orders' : $table) . " WHERE $where AND created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY) AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)");
+                if ($b <= 0) return $a > 0 ? 100.0 : null;
+                return round(($a - $b) / $b * 100, 1);
+            } catch (Throwable $e) { return null; }
+        };
+        $trends = ['revenue' => $trend('orders_rev', $rev), 'orders' => $trend('orders'), 'products' => $trend('products'), 'users' => $trend('users')];
+        $latest = [];
+        try {
+            $latest = apx_rows($pdo, "SELECT o.id, COALESCE(o.guest_name, u.name, 'Guest') customer, o.total, o.status, o.created_at, (SELECT COUNT(*) FROM order_items xi LEFT JOIN products xp ON xp.id = xi.product_id WHERE xi.order_id = o.id AND xp.seller_id IS NULL) hm FROM orders o LEFT JOIN users u ON u.id = o.user_id ORDER BY o.id DESC LIMIT 5");
+            foreach ($latest as &$l0) { $l0['tab'] = ((int) $l0['hm']) > 0 ? 'main' : 'sellers'; unset($l0['hm']); }
+            unset($l0);
+        } catch (Throwable $e) { $latest = []; }
+        out(['success' => true, 'counts' => $counts, 'sales' => $sales, 'trends' => $trends, 'latest_orders' => $latest,
             'main' => ['count' => aou_scope_count($pdo, 'main'), 'orders' => $main],
             'sellers_orders' => ['count' => aou_scope_count($pdo, 'sellers'), 'groups' => $sellerGroups],
             'recent_products' => $recent, 'low_items' => $low, 'categories' => $cats, 'sellers' => $sellers, 'users' => $users]);

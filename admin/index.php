@@ -71,7 +71,7 @@ $tiles[5] = ['🔔', 'Needs attention', (int) $attnTotal, 'orders.php?status=pen
 $stLabel = ['approved' => 'Approved', 'pending' => 'Review', 'rejected' => 'Rejected', 'hidden' => 'Hidden'];
 echo aou_css();
 ?>
-<link rel="stylesheet" href="../assets/css/admin-dash-gold.css?v=1">
+<link rel="stylesheet" href="../assets/css/admin-dash-gold.css?v=2">
 <style>
 html{scroll-behavior:smooth}
 .dnav{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:16px}.dnav a{flex:none;padding:8px 14px;border-radius:999px;background:#fff;border:1px solid #dce4df;font-weight:700;font-size:13px}.dnav a:hover{background:#1d6b52;color:#fff;border-color:#1d6b52}
@@ -88,7 +88,57 @@ html{scroll-behavior:smooth}
 
 <div class="dnav"><a href="#overview">Overview</a><a href="#orders">Orders</a><a href="#products">Products</a><a href="#categories">Categories</a><a href="#sellers">Sellers</a><a href="#users">Users</a></div>
 
-<a class="hero" href="orders.php"><div class="hb"><div class="hl">💰 Confirmed revenue</div><div class="hv"><?= CURRENCY . number_format($revenue, 2) ?></div><div class="hp"><span>🛒 <?= number_format($nOrders) ?> orders</span><span>⏳ <?= (int) $pendingOrders ?> pending</span><span><?= $attnTotal ? "👀 " . (int) $attnTotal . " to check" : "✅ all clear" ?></span></div></div></a>
+<?php /* iad-v2: dashboard example layout */
+$iad_rev = "status IN ('paid','shipped','delivered')";
+$iad_by = []; foreach (dsh_rows($pdo, "SELECT DATE(created_at) d, COALESCE(SUM(total),0) t FROM orders WHERE $iad_rev AND created_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY) GROUP BY DATE(created_at)") as $r0) $iad_by[$r0['d']] = (float) $r0['t'];
+$iad_s = ['7' => [], '30' => []];
+for ($i = 29; $i >= 0; $i--) { $d = date('Y-m-d', strtotime("-$i day")); $pt = [date('d/m', strtotime($d)), $iad_by[$d] ?? 0.0]; $iad_s['30'][] = $pt; if ($i < 7) $iad_s['7'][] = $pt; }
+$iad_tr = function (string $tbl, string $sum = 'COUNT(*)', string $w = '1=1') use ($pdo) {
+    $a = (float) dsh_val($pdo, "SELECT COALESCE($sum,0) FROM $tbl WHERE $w AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
+    $b = (float) dsh_val($pdo, "SELECT COALESCE($sum,0) FROM $tbl WHERE $w AND created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY) AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)");
+    if ($b <= 0) return $a > 0 ? 100.0 : null;
+    return round(($a - $b) / $b * 100, 1);
+};
+$iad_k = [
+    ['k1', '💰', 'Total Revenue', CURRENCY . number_format($revenue, 2), $iad_tr('orders', 'SUM(total)', $iad_rev), 'orders.php'],
+    ['k2', '🛒', 'Total Orders', number_format((int) $nOrders), $iad_tr('orders'), 'orders.php'],
+    ['k3', '📦', 'Total Products', number_format((int) $nProducts), $iad_tr('products'), 'products.php'],
+    ['k4', '👥', 'Total Customers', number_format((int) $nUsers), $iad_tr('users'), 'users.php'],
+];
+$iad_latest = dsh_rows($pdo, "SELECT o.id, COALESCE(o.guest_name, u.name, 'Guest') customer, o.total, o.status, o.created_at FROM orders o LEFT JOIN users u ON u.id = o.user_id ORDER BY o.id DESC LIMIT 6");
+function iad_svg(array $pts): string {
+    $W = 800; $H = 220; $L = 46; $B = 26; $T = 10; $R = 12; $w = $W - $L - $R; $h = $H - $B - $T;
+    $max = 0.0; foreach ($pts as $p) $max = max($max, $p[1]); if ($max <= 0) $max = 1;
+    $o = '<svg viewBox="0 0 ' . $W . ' ' . $H . '" preserveAspectRatio="none">';
+    for ($g = 0; $g <= 4; $g++) { $y = $T + $h - $h * $g / 4; $v = $max * $g / 4; $t = $v >= 1000 ? round($v / 1000, $v >= 10000 ? 0 : 1) . 'K' : round($v);
+        $o .= '<line x1="' . $L . '" x2="' . ($W - $R) . '" y1="' . $y . '" y2="' . $y . '" stroke="#e6e9e7"/><text x="' . ($L - 6) . '" y="' . ($y + 4) . '" font-size="11" fill="#6b7973" text-anchor="end">' . $t . '</text>'; }
+    $n = count($pts); $xy = []; $line = '';
+    foreach ($pts as $i => $p) { $x = $L + ($n > 1 ? $w * $i / ($n - 1) : $w / 2); $y = $T + $h - $h * ($p[1] / $max); $xy[] = [$x, $y]; $line .= ($i ? ' L' : 'M') . round($x, 1) . ' ' . round($y, 1); }
+    $o .= '<defs><linearGradient id="gf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e4b43c" stop-opacity=".35"/><stop offset="1" stop-color="#e4b43c" stop-opacity=".02"/></linearGradient></defs>';
+    $o .= '<path d="' . $line . ' L' . end($xy)[0] . ' ' . ($T + $h) . ' L' . $xy[0][0] . ' ' . ($T + $h) . ' Z" fill="url(#gf)"/><path d="' . $line . '" fill="none" stroke="#e4b43c" stroke-width="3" stroke-linejoin="round"/>';
+    $step = $n > 10 ? 5 : 1;
+    foreach ($pts as $i => $p) { if ($n <= 10 || $i == $n - 1) $o .= '<circle cx="' . round($xy[$i][0], 1) . '" cy="' . round($xy[$i][1], 1) . '" r="4" fill="#e4b43c"/>';
+        if ($i % $step == 0 || $i == $n - 1) $o .= '<text x="' . round($xy[$i][0], 1) . '" y="' . ($H - 6) . '" font-size="11" fill="#6b7973" text-anchor="middle">' . htmlspecialchars($p[0]) . '</text>'; }
+    return $o . '</svg>';
+}
+?>
+<div class="wel"><div><h1>Welcome back, Admin!</h1><p>Here's what's happening with your store today.</p></div><div class="dt">📅 <?= date('D, M j, Y') ?><small><?= date('h:i A') ?></small></div></div>
+<div class="kpis"><?php foreach ($iad_k as $k): $t = $k[4]; ?>
+  <a class="kpi <?= $k[0] ?>" href="<?= $k[5] ?>"><span class="ki"><?= $k[1] ?></span><span><span class="kl"><?= $k[2] ?></span><span class="kv" style="display:block"><?= $k[3] ?></span><span class="kt <?= $t === null ? '' : ($t >= 0 ? 'up' : 'dn') ?>"><?= $t === null ? 'no change data' : (($t >= 0 ? '↑ ' : '↓ ') . abs($t) . '%') ?><?php if ($t !== null): ?><small>vs last 7 days</small><?php endif; ?></span></span></a>
+<?php endforeach; ?></div>
+<div class="pan"><div class="ph"><div><h2>Sales Overview</h2><div class="sub">Revenue trend (<span id="iadr">last 7 days</span>)</div></div><div class="rng"><a class="on" data-r="7">7 Days</a><a data-r="30">30 Days</a></div></div>
+  <div class="chart" id="iadc7"><?= iad_svg($iad_s['7']) ?></div><div class="chart" id="iadc30" style="display:none"><?= iad_svg($iad_s['30']) ?></div></div>
+<script>document.querySelectorAll('.rng a').forEach(function(a){a.onclick=function(){document.querySelectorAll('.rng a').forEach(function(x){x.classList.remove('on')});a.classList.add('on');var r=a.dataset.r;document.getElementById('iadc7').style.display=r==='7'?'':'none';document.getElementById('iadc30').style.display=r==='30'?'':'none';document.getElementById('iadr').textContent='last '+r+' days'}});</script>
+<div class="pan"><h2>Quick Actions</h2><div class="sub">Manage your store with ease.</div><div class="qg">
+  <a class="qc q1" href="product_edit.php"><span class="qi">➕</span><span><b>Add Product</b><small>Create new product</small></span></a>
+  <a class="qc q2" href="orders.php"><span class="qi">🛒</span><span><b>Manage Orders</b><small>View and process orders</small></span></a>
+  <a class="qc q3" href="sellers.php"><span class="qi">🏪</span><span><b>Manage Sellers</b><small>Control seller accounts</small></span></a>
+  <a class="qc q4" href="settings.php"><span class="qi">⚙️</span><span><b>Store Settings</b><small>Configure your store</small></span></a>
+</div></div>
+<div class="pan"><div class="ph"><div><h2>Recent Orders</h2><div class="sub">Latest orders from your customers</div></div><a href="orders.php" style="font-weight:800">View all ›</a></div>
+  <div class="rwrap"><table class="rot"><tr><th>#</th><th>Customer</th><th>Total</th><th>Status</th><th>Date</th><th></th></tr>
+  <?php foreach ($iad_latest as $o): ?><tr><td>#IAN-<?= str_pad((string) (int) $o['id'], 4, '0', STR_PAD_LEFT) ?></td><td><?= admin_h($o['customer']) ?></td><td><?= CURRENCY . number_format((float) $o['total'], 2) ?></td><td><span class="st <?= admin_h($o['status']) ?>"><?= admin_h(ucfirst((string) $o['status'])) ?></span></td><td><?= admin_h(substr((string) $o['created_at'], 0, 10)) ?></td><td><a href="order_view.php?id=<?= (int) $o['id'] ?>" style="font-weight:800">View ›</a></td></tr><?php endforeach; ?>
+  <?php if (!$iad_latest): ?><tr><td colspan="6" class="muted">No orders yet.</td></tr><?php endif; ?></table></div></div>
 <div id="overview" class="tiles">
 <?php foreach ($tiles as $t): ?>
   <a class="tile" href="<?= $t[3] ?>"><div class="ic"><?= $t[0] ?></div><div class="lb"><?= admin_h($t[1]) ?></div><div class="vl"><?= is_int($t[2]) ? number_format($t[2]) : $t[2] ?></div><?php if ($t[4] !== ''): ?><span class="sb"><?= admin_h($t[4]) ?></span><?php endif; ?></a>
