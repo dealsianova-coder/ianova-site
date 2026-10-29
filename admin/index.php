@@ -71,7 +71,7 @@ $tiles[5] = ['🔔', 'Needs attention', (int) $attnTotal, 'orders.php?status=pen
 $stLabel = ['approved' => 'Approved', 'pending' => 'Review', 'rejected' => 'Rejected', 'hidden' => 'Hidden'];
 echo aou_css();
 ?>
-<link rel="stylesheet" href="../assets/css/admin-dash-gold.css?v=3">
+<link rel="stylesheet" href="../assets/css/admin-dash-gold.css?v=4">
 <style>
 html{scroll-behavior:smooth}
 .dnav{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:16px}.dnav a{flex:none;padding:8px 14px;border-radius:999px;background:#fff;border:1px solid #dce4df;font-weight:700;font-size:13px}.dnav a:hover{background:#1d6b52;color:#fff;border-color:#1d6b52}
@@ -88,7 +88,12 @@ html{scroll-behavior:smooth}
 
 <div class="dnav"><a href="#overview">Overview</a><a href="#orders">Orders</a><a href="#products">Products</a><a href="#categories">Categories</a><a href="#sellers">Sellers</a><a href="#users">Users</a></div>
 
-<?php /* iad-v2: dashboard example layout */
+<?php /* iad-v2: dashboard example layout (customisable, hide revenue, grouped attention) */
+if (is_file(__DIR__ . '/../includes/dash_prefs.php')) require_once __DIR__ . '/../includes/dash_prefs.php';
+$iad_p = function_exists('dpf_get') ? dpf_get($pdo, (int) ($_SESSION['admin_id'] ?? 0)) : ['hide' => [], 'quick' => ['add_product', 'orders', 'sellers', 'settings']];
+$iad_show = fn(string $id) => !in_array($id, $iad_p['hide'], true);
+$iad_since = function_exists('rv_since_and') ? rv_since_and($pdo) : '';
+$iad_n = (int) dsh_val($pdo, 'SELECT COUNT(*) FROM orders WHERE 1=1' . $iad_since);
 $iad_rev = "status IN ('paid','shipped','delivered')" . (function_exists('rv_since') && rv_since($pdo) !== '' ? ' AND created_at >= ' . $pdo->quote(rv_since($pdo)) : '');
 $iad_by = []; foreach (dsh_rows($pdo, "SELECT DATE(created_at) d, COALESCE(SUM(total),0) t FROM orders WHERE $iad_rev AND created_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY) GROUP BY DATE(created_at)") as $r0) $iad_by[$r0['d']] = (float) $r0['t'];
 $iad_s = ['7' => [], '30' => []];
@@ -101,11 +106,15 @@ $iad_tr = function (string $tbl, string $sum = 'COUNT(*)', string $w = '1=1') us
 };
 $iad_k = [
     ['k1', '💰', 'Total Revenue', CURRENCY . number_format($revenue, 2), $iad_tr('orders', 'SUM(total)', $iad_rev), 'revenue.php'],
-    ['k2', '🛒', 'Total Orders', number_format((int) $nOrders), $iad_tr('orders'), 'orders.php'],
+    ['k2', '🛒', 'Total Orders', number_format($iad_n), $iad_tr('orders', 'COUNT(*)', '1=1' . $iad_since), 'orders.php'],
     ['k3', '📦', 'Total Products', number_format((int) $nProducts), $iad_tr('products'), 'products.php'],
     ['k4', '👥', 'Total Customers', number_format((int) $nUsers), $iad_tr('users'), 'users.php'],
 ];
-$iad_latest = dsh_rows($pdo, "SELECT o.id, COALESCE(o.guest_name, u.name, 'Guest') customer, o.total, o.status, o.created_at FROM orders o LEFT JOIN users u ON u.id = o.user_id ORDER BY o.id DESC LIMIT 6");
+$iad_latest = dsh_rows($pdo, "SELECT o.id, COALESCE(o.guest_name, u.name, 'Guest') customer, o.total, o.status, o.created_at FROM orders o LEFT JOIN users u ON u.id = o.user_id WHERE 1=1" . ($iad_since !== '' ? str_replace('created_at', 'o.created_at', $iad_since) : '') . " ORDER BY o.id DESC LIMIT 6");
+$iad_groups = ['🛒 Orders' => [0, 6, 7], '📦 Products & stock' => [1, 5], '🏪 Sellers' => [2, 3, 9], '💰 Money' => [8], '⚙️ System' => [4, 10]];
+$iad_clear = [];
+$iad_hidden_css = '';
+foreach (['orders', 'products', 'categories', 'sellers', 'users'] as $iad_k2) if (!$iad_show('more_' . $iad_k2)) $iad_hidden_css .= '#' . $iad_k2 . '.sec,.dnav a[href="#' . $iad_k2 . '"]{display:none}';
 function iad_svg(array $pts): string {
     $W = 800; $H = 220; $L = 46; $B = 26; $T = 10; $R = 12; $w = $W - $L - $R; $h = $H - $B - $T;
     $max = 0.0; foreach ($pts as $p) $max = max($max, $p[1]); if ($max <= 0) $max = 1;
@@ -122,23 +131,40 @@ function iad_svg(array $pts): string {
     return $o . '</svg>';
 }
 ?>
-<div class="wel"><div><h1>Welcome back, Admin!</h1><p>Here's what's happening with your store today.</p></div><div class="dt">📅 <?= date('D, M j, Y') ?><small><?= date('h:i A') ?></small></div></div>
-<div class="kpis"><?php foreach ($iad_k as $k): $t = $k[4]; ?>
-  <a class="kpi <?= $k[0] ?>" href="<?= $k[5] ?>"><span class="ki"><?= $k[1] ?></span><span><span class="kl"><?= $k[2] ?></span><span class="kv" style="display:block"><?= $k[3] ?></span><span class="kt <?= $t === null ? '' : ($t >= 0 ? 'up' : 'dn') ?>"><?= $t === null ? 'no change data' : (($t >= 0 ? '↑ ' : '↓ ') . abs($t) . '%') ?><?php if ($t !== null): ?><small>vs last 7 days</small><?php endif; ?></span></span></a>
+<?php if ($iad_hidden_css !== ''): ?><style><?= $iad_hidden_css ?></style><?php endif; ?>
+<div class="wel"><div><?php if ($iad_show('welcome')): ?><h1>Welcome back, Admin!</h1><p>Here's what's happening with your store today.</p><?php else: ?><h1>Dashboard</h1><?php endif; ?></div><div class="dt"><?php if ($iad_show('welcome')): ?>📅 <?= date('D, M j, Y') ?><small><?= date('h:i A') ?></small><?php endif; ?><a class="btn gray" style="display:inline-block;margin-top:6px" href="dash_customize.php">⚙️ Customize</a></div></div>
+<div class="kpis"><?php foreach ($iad_k as $k): $t = $k[4]; $id = ['k1' => 'kpi_revenue', 'k2' => 'kpi_orders', 'k3' => 'kpi_products', 'k4' => 'kpi_customers'][$k[0]]; if (!$iad_show($id)) continue; $isRev = $k[0] === 'k1'; ?>
+  <a class="kpi <?= $k[0] ?>" href="<?= $k[5] ?>"><span class="ki"><?= $k[1] ?></span><span><span class="kl"><?= $k[2] ?><?php if ($isRev): ?> <button type="button" class="eye" title="Hide or show revenue">👁️</button><?php endif; ?></span><span class="kv<?= $isRev ? ' rvv' : '' ?>" style="display:block" data-v="<?= admin_h($k[3]) ?>"><?= $k[3] ?></span><span class="kt <?= $t === null ? '' : ($t >= 0 ? 'up' : 'dn') ?>"><?= $t === null ? 'no change data' : (($t >= 0 ? '↑ ' : '↓ ') . abs($t) . '%') ?><?php if ($t !== null): ?><small>vs last 7 days</small><?php endif; ?></span></span></a>
 <?php endforeach; ?></div>
+<?php if ($iad_show('sales')): ?>
 <div class="pan"><div class="ph"><div><h2>Sales Overview</h2><div class="sub">Revenue trend (<span id="iadr">last 7 days</span>)</div></div><div class="rng"><a class="on" data-r="7">7 Days</a><a data-r="30">30 Days</a></div></div>
   <div class="chart" id="iadc7"><?= iad_svg($iad_s['7']) ?></div><div class="chart" id="iadc30" style="display:none"><?= iad_svg($iad_s['30']) ?></div></div>
 <script>document.querySelectorAll('.rng a').forEach(function(a){a.onclick=function(){document.querySelectorAll('.rng a').forEach(function(x){x.classList.remove('on')});a.classList.add('on');var r=a.dataset.r;document.getElementById('iadc7').style.display=r==='7'?'':'none';document.getElementById('iadc30').style.display=r==='30'?'':'none';document.getElementById('iadr').textContent='last '+r+' days'}});</script>
+<?php endif; ?>
+<script>(function(){var k='iad_hide_rev',h=false;try{h=localStorage.getItem(k)==='1'}catch(e){}function ap(){document.querySelectorAll('.rvv').forEach(function(e){e.textContent=h?'KSh ••••••':e.getAttribute('data-v')});document.querySelectorAll('.eye').forEach(function(b){b.textContent=h?'🙈':'👁️'})}document.querySelectorAll('.eye').forEach(function(b){b.onclick=function(ev){ev.preventDefault();ev.stopPropagation();h=!h;try{localStorage.setItem(k,h?'1':'0')}catch(e){}ap()}});ap()})();</script>
+<?php if ($iad_show('quick')): ?>
 <div class="pan"><h2>Quick Actions</h2><div class="sub">Manage your store with ease.</div><div class="qg">
-  <a class="qc q1" href="product_edit.php"><span class="qi">➕</span><span><b>Add Product</b><small>Create new product</small></span></a>
-  <a class="qc q2" href="orders.php"><span class="qi">🛒</span><span><b>Manage Orders</b><small>View and process orders</small></span></a>
-  <a class="qc q3" href="sellers.php"><span class="qi">🏪</span><span><b>Manage Sellers</b><small>Control seller accounts</small></span></a>
-  <a class="qc q4" href="settings.php"><span class="qi">⚙️</span><span><b>Store Settings</b><small>Configure your store</small></span></a>
+<?php foreach ($iad_p['quick'] as $qi => $qid): if (!isset(DPF_QUICK[$qid])) continue; $qd = DPF_QUICK[$qid]; ?>
+  <a class="qc q<?= ($qi % 4) + 1 ?>" href="<?= admin_h($qd[4]) ?>"><span class="qi"><?= $qd[2] ?></span><span><b><?= admin_h($qd[0]) ?></b><small><?= admin_h($qd[1]) ?></small></span></a>
+<?php endforeach; ?>
 </div></div>
+<?php endif; ?>
+<?php if ($iad_show('recent')): ?>
 <div class="pan"><div class="ph"><div><h2>Recent Orders</h2><div class="sub">Latest orders from your customers</div></div><a href="orders.php" style="font-weight:800">View all ›</a></div>
   <div class="rwrap"><table class="rot"><tr><th>#</th><th>Customer</th><th>Total</th><th>Status</th><th>Date</th><th></th></tr>
   <?php foreach ($iad_latest as $o): ?><tr><td>#IAN-<?= str_pad((string) (int) $o['id'], 4, '0', STR_PAD_LEFT) ?></td><td><?= admin_h($o['customer']) ?></td><td><?= CURRENCY . number_format((float) $o['total'], 2) ?></td><td><span class="st <?= admin_h($o['status']) ?>"><?= admin_h(ucfirst((string) $o['status'])) ?></span></td><td><?= admin_h(substr((string) $o['created_at'], 0, 10)) ?></td><td><a href="order_view.php?id=<?= (int) $o['id'] ?>" style="font-weight:800">View ›</a></td></tr><?php endforeach; ?>
   <?php if (!$iad_latest): ?><tr><td colspan="6" class="muted">No orders yet.</td></tr><?php endif; ?></table></div></div>
+<?php endif; ?>
+<?php if ($iad_show('attention')): ?>
+<div class="atg"><div class="atgh"><span><?= $attnTotal ? '👀 Needs your attention' : '✅ All caught up' ?></span><?php if ($attnTotal): ?><em><?= (int) $attnTotal ?></em><?php endif; ?></div><div class="atgb">
+<?php foreach ($iad_groups as $gname => $gidx): $hot = []; foreach ($gidx as $gi) { if (!isset($attn[$gi])) continue; if ((int) $attn[$gi][2] > 0) $hot[] = $attn[$gi]; else $iad_clear[] = $attn[$gi]; } if (!$hot) continue; ?>
+  <div class="agt"><?= admin_h($gname) ?></div><div class="agrid"><?php foreach ($hot as $a0): ?><a class="ai hot" href="<?= $a0[3] ?>"><span><?= $a0[0] ?></span><span><?= admin_h($a0[1]) ?></span><b><?= (int) $a0[2] ?></b></a><?php endforeach; ?></div>
+<?php endforeach; ?>
+<?php if (!$attnTotal): ?><p class="muted" style="margin:6px 0">Nothing needs your action right now. 🎉</p><?php endif; ?>
+<?php if ($iad_clear): ?><details style="margin-top:10px"><summary style="cursor:pointer;font-weight:800;color:#6b7973"><?= count($iad_clear) ?> clear items</summary><div class="agrid" style="margin-top:8px"><?php foreach ($iad_clear as $a0): ?><a class="ai" href="<?= $a0[3] ?>"><span><?= $a0[0] ?></span><span><?= admin_h($a0[1]) ?></span><b><?= (int) $a0[2] ?></b></a><?php endforeach; ?></div></details><?php endif; ?>
+</div></div>
+<?php endif; ?>
+<?php /* iad-v2-end */ ?>
 <div id="overview" class="tiles">
 <?php foreach ($tiles as $t): ?>
   <a class="tile" href="<?= $t[3] ?>"><div class="ic"><?= $t[0] ?></div><div class="lb"><?= admin_h($t[1]) ?></div><div class="vl"><?= is_int($t[2]) ? number_format($t[2]) : $t[2] ?></div><?php if ($t[4] !== ''): ?><span class="sb"><?= admin_h($t[4]) ?></span><?php endif; ?></a>

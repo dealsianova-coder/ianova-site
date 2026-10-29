@@ -32,6 +32,12 @@ function rv_cond(PDO $pdo, string $a = 'o'): string {
     return "$a.status IN " . RV_OK . ($s !== '' ? " AND $a.created_at >= " . $pdo->quote($s) : '');
 }
 
+/** ' AND created_at >= ...' for dashboard figures (orders count, latest orders, trends) after a start-over; '' if never reset. */
+function rv_since_and(PDO $pdo, string $col = 'created_at'): string {
+    $s = rv_since($pdo);
+    return $s !== '' ? " AND $col >= " . $pdo->quote($s) : '';
+}
+
 /** Total confirmed revenue since the last start-over. */
 function rv_total(PDO $pdo): float {
     rv_ensure($pdo);
@@ -173,7 +179,13 @@ function rv_trash_all(PDO $pdo, int $adminId, string $adminName): string {
     $ids = array_map('intval', array_column($orders, 'id'));
     $in = implode(',', $ids);
     $data = ['orders' => $orders];
-    foreach (RV_ORDER_TABLES as $t) {
+    $tables = RV_ORDER_TABLES;
+    try { // any other table that points at an order (so nothing blocks the delete)
+        foreach ($pdo->query("SELECT DISTINCT TABLE_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = 'order_id'")->fetchAll(PDO::FETCH_COLUMN) as $t0) {
+            if (preg_match('/^[A-Za-z0-9_]+$/', (string) $t0) && !in_array($t0, ['orders', 'order_trash', 'revenue_resets'], true) && !in_array($t0, $tables, true)) $tables[] = (string) $t0;
+        }
+    } catch (Throwable $e) { /* use the known list */ }
+    foreach ($tables as $t) {
         try { $data[$t] = $pdo->query("SELECT * FROM $t WHERE order_id IN ($in)")->fetchAll(PDO::FETCH_ASSOC); } catch (Throwable $e) { /* table not there */ }
     }
     $total = array_sum(array_map(fn($o) => (float) $o['total'], $orders));
@@ -213,7 +225,8 @@ function rv_trash_restore(PDO $pdo, int $id): string {
     if (!is_array($data) || empty($data['orders'])) return 'The saved copy is unreadable.';
     $pdo->beginTransaction();
     try {
-        foreach (array_merge(['orders'], RV_ORDER_TABLES) as $t) {
+        foreach (array_merge(['orders'], array_diff(array_keys($data), ['orders'])) as $t) {
+            if (!preg_match('/^[A-Za-z0-9_]+$/', (string) $t)) continue;
             foreach ($data[$t] ?? [] as $row) {
                 $cols = array_keys($row);
                 $sql = "INSERT INTO $t (`" . implode('`,`', $cols) . '`) VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ')';

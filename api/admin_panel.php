@@ -17,6 +17,7 @@ require_once __DIR__ . '/../includes/coupons.php';
 require_once __DIR__ . '/../includes/payouts.php';
 require_once __DIR__ . '/../includes/payments.php';
 require_once __DIR__ . '/../includes/revenue.php';
+require_once __DIR__ . '/../includes/dash_prefs.php';
 team_ensure($pdo);
 oo_ensure($pdo);
 date_default_timezone_set('Africa/Nairobi');
@@ -123,7 +124,7 @@ switch ($action) {
         $counts = [
             'products' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM products'),
             'categories' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM categories'),
-            'orders' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM orders'),
+            'orders' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM orders WHERE 1=1' . rv_since_and($pdo)),
             'users' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM users'),
             'sellers' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM sellers'),
             'revenue' => rv_total($pdo),
@@ -198,14 +199,14 @@ switch ($action) {
                 return round(($a - $b) / $b * 100, 1);
             } catch (Throwable $e) { return null; }
         };
-        $trends = ['revenue' => $trend('orders_rev', $rev), 'orders' => $trend('orders'), 'products' => $trend('products'), 'users' => $trend('users')];
+        $trends = ['revenue' => $trend('orders_rev', $rev), 'orders' => $trend('orders', '1=1' . rv_since_and($pdo)), 'products' => $trend('products'), 'users' => $trend('users')];
         $latest = [];
         try {
-            $latest = apx_rows($pdo, "SELECT o.id, COALESCE(o.guest_name, u.name, 'Guest') customer, o.total, o.status, o.created_at, (SELECT COUNT(*) FROM order_items xi LEFT JOIN products xp ON xp.id = xi.product_id WHERE xi.order_id = o.id AND xp.seller_id IS NULL) hm FROM orders o LEFT JOIN users u ON u.id = o.user_id ORDER BY o.id DESC LIMIT 5");
+            $latest = apx_rows($pdo, "SELECT o.id, COALESCE(o.guest_name, u.name, 'Guest') customer, o.total, o.status, o.created_at, (SELECT COUNT(*) FROM order_items xi LEFT JOIN products xp ON xp.id = xi.product_id WHERE xi.order_id = o.id AND xp.seller_id IS NULL) hm FROM orders o LEFT JOIN users u ON u.id = o.user_id WHERE 1=1" . rv_since_and($pdo, 'o.created_at') . " ORDER BY o.id DESC LIMIT 5");
             foreach ($latest as &$l0) { $l0['tab'] = ((int) $l0['hm']) > 0 ? 'main' : 'sellers'; unset($l0['hm']); }
             unset($l0);
         } catch (Throwable $e) { $latest = []; }
-        out(['success' => true, 'counts' => $counts, 'sales' => $sales, 'trends' => $trends, 'latest_orders' => $latest,
+        out(['success' => true, 'prefs' => dpf_get($pdo, (int) $meAdmin['id']), 'counts' => $counts, 'sales' => $sales, 'trends' => $trends, 'latest_orders' => $latest,
             'main' => ['count' => aou_scope_count($pdo, 'main'), 'orders' => $main],
             'sellers_orders' => ['count' => aou_scope_count($pdo, 'sellers'), 'groups' => $sellerGroups],
             'recent_products' => $recent, 'low_items' => $low, 'categories' => $cats, 'sellers' => $sellers, 'users' => $users]);
@@ -557,12 +558,24 @@ switch ($action) {
             $m = rv_restore($pdo, (int) ($b['id'] ?? 0));
         } elseif ($action === 'revenue_trash_do') {
             if (strtoupper(trim((string) ($b['confirm'] ?? ''))) !== 'DELETE') fail('Type DELETE to confirm.');
+            $moved = rv_order_counts($pdo);
             $m = rv_trash_all($pdo, (int) $meAdmin['id'], $who);
         } else {
             $m = rv_trash_restore($pdo, (int) ($b['id'] ?? 0));
         }
         if ($m !== '') fail($m);
-        out(['success' => true]);
+        $oc = rv_order_counts($pdo);
+        out(['success' => true, 'orders_left' => $oc['n'], 'revenue_now' => rv_total($pdo), 'moved_n' => (int) ($moved['n'] ?? 0), 'moved_total' => (float) ($moved['total'] ?? 0)]);
+
+    case 'trash_list':
+        if (!team_is_master($pdo, (int) $meAdmin['id'])) fail('Only the master admin can open the trash.', 403);
+        out(['success' => true, 'resets' => rv_resets($pdo), 'orders' => rv_trash_list($pdo), 'hold_days' => RV_HOLD_DAYS]);
+
+    case 'dash_prefs_save':
+        $hide = is_array($b['hide'] ?? null) ? $b['hide'] : [];
+        $quick = is_array($b['quick'] ?? null) ? $b['quick'] : [];
+        dpf_save($pdo, (int) $meAdmin['id'], $hide, $quick);
+        out(['success' => true, 'prefs' => dpf_get($pdo, (int) $meAdmin['id'])]);
 
     case 'team_idle_set':
         $m = team_idle_set($pdo, (int) $meAdmin['id'], (int) ($b['minutes'] ?? -1), (string) ($b['security_password'] ?? ''));
