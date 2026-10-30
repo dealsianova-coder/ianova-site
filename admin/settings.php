@@ -71,6 +71,8 @@ $page_title = 'Site content & settings';
 require 'includes/header.php';
 ?>
 
+<div class="card" style="margin-bottom:16px"><a href="dash_customize.php" style="display:flex;gap:12px;align-items:center;color:inherit"><span style="font-size:24px">🎛️</span><span><b style="font-size:16px">Dashboard layout</b><br><span class="muted">Choose what you see on your dashboard and your quick actions.</span></span><span style="margin-left:auto">›</span></a></div>
+
 <div class="card form-card">
 
 <?php if (isset($_GET['saved'])): ?>

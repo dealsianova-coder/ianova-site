@@ -14,11 +14,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 $P = dpf_get($pdo, $meId);
-$page_title = 'Customize dashboard';
+$page_title = 'Dashboard layout';
 require 'includes/header.php';
 ?>
 <link rel="stylesheet" href="../assets/css/admin-dash-gold.css?v=4">
-<?php if ($notice): ?><div class="notice"><?= admin_h($notice) ?> <a href="index.php" style="font-weight:800">Back to dashboard ›</a></div><?php endif; ?>
+<?php if ($notice): ?><div class="notice"><?= admin_h($notice) ?> <a href="index.php" style="font-weight:800">Open dashboard ›</a></div><?php endif; ?>
 <p class="muted">Only you see these changes. Other admins keep their own dashboard.</p>
 <form method="post" class="cz"><input type="hidden" name="csrf" value="<?= admin_csrf() ?>">
   <div class="pan"><h2>Show on my dashboard</h2>

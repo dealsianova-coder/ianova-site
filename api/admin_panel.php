@@ -206,7 +206,7 @@ switch ($action) {
             foreach ($latest as &$l0) { $l0['tab'] = ((int) $l0['hm']) > 0 ? 'main' : 'sellers'; unset($l0['hm']); }
             unset($l0);
         } catch (Throwable $e) { $latest = []; }
-        out(['success' => true, 'prefs' => dpf_get($pdo, (int) $meAdmin['id']), 'counts' => $counts, 'sales' => $sales, 'trends' => $trends, 'latest_orders' => $latest,
+        out(['success' => true, 'me_name' => (string) $pdo->query('SELECT name FROM admins WHERE id = ' . (int) $meAdmin['id'])->fetchColumn(), 'prefs' => dpf_get($pdo, (int) $meAdmin['id']), 'counts' => $counts, 'sales' => $sales, 'trends' => $trends, 'latest_orders' => $latest,
             'main' => ['count' => aou_scope_count($pdo, 'main'), 'orders' => $main],
             'sellers_orders' => ['count' => aou_scope_count($pdo, 'sellers'), 'groups' => $sellerGroups],
             'recent_products' => $recent, 'low_items' => $low, 'categories' => $cats, 'sellers' => $sellers, 'users' => $users]);
@@ -570,6 +570,9 @@ switch ($action) {
     case 'trash_list':
         if (!team_is_master($pdo, (int) $meAdmin['id'])) fail('Only the master admin can open the trash.', 403);
         out(['success' => true, 'resets' => rv_resets($pdo), 'orders' => rv_trash_list($pdo), 'hold_days' => RV_HOLD_DAYS]);
+
+    case 'dash_prefs_get':
+        out(['success' => true, 'prefs' => dpf_get($pdo, (int) $meAdmin['id'])]);
 
     case 'dash_prefs_save':
         $hide = is_array($b['hide'] ?? null) ? $b['hide'] : [];

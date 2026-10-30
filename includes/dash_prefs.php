@@ -31,7 +31,7 @@ function dpf_ensure(PDO $pdo): void {
     static $done = false;
     if ($done) return;
     $done = true;
-    try { $pdo->exec("CREATE TABLE IF NOT EXISTS admin_prefs (admin_id INT NOT NULL, k VARCHAR(40) NOT NULL, v TEXT NOT NULL, PRIMARY KEY (admin_id, k)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (Throwable $e) { /* ignore */ }
+    try { $pdo->exec("CREATE TABLE IF NOT EXISTS admin_dash_prefs (admin_id INT NOT NULL, k VARCHAR(40) NOT NULL, v TEXT NOT NULL, PRIMARY KEY (admin_id, k)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch (Throwable $e) { /* ignore */ }
 }
 
 /** ['hide' => [section ids], 'quick' => [quick action ids]] */
@@ -39,7 +39,7 @@ function dpf_get(PDO $pdo, int $adminId): array {
     dpf_ensure($pdo);
     $out = ['hide' => [], 'quick' => DPF_QUICK_DEFAULT];
     try {
-        $q = $pdo->prepare("SELECT v FROM admin_prefs WHERE admin_id = ? AND k = 'dash'"); $q->execute([$adminId]);
+        $q = $pdo->prepare("SELECT v FROM admin_dash_prefs WHERE admin_id = ? AND k = 'dash'"); $q->execute([$adminId]);
         $v = $q->fetchColumn();
         if ($v) {
             $j = json_decode((string) $v, true);
@@ -59,5 +59,5 @@ function dpf_save(PDO $pdo, int $adminId, array $hide, array $quick): void {
     $quick = array_slice(array_values(array_filter(array_unique($quick), fn($x) => is_string($x) && isset(DPF_QUICK[$x]))), 0, 8);
     if (!$quick) $quick = DPF_QUICK_DEFAULT;
     $json = json_encode(['hide' => $hide, 'quick' => $quick]);
-    $pdo->prepare("INSERT INTO admin_prefs (admin_id, k, v) VALUES (?, 'dash', ?) ON DUPLICATE KEY UPDATE v = VALUES(v)")->execute([$adminId, $json]);
+    $pdo->prepare("INSERT INTO admin_dash_prefs (admin_id, k, v) VALUES (?, 'dash', ?) ON DUPLICATE KEY UPDATE v = VALUES(v)")->execute([$adminId, $json]);
 }
