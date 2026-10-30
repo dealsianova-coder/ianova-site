@@ -36,6 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $sellers = $pdo->query('SELECT s.*, COUNT(p.id) products, (SELECT COUNT(*) FROM seller_messages m WHERE m.seller_id = s.id AND m.sender = "seller" AND m.read_at IS NULL) unread FROM sellers s LEFT JOIN products p ON p.seller_id = s.id GROUP BY s.id ORDER BY FIELD(s.status, "pending", "approved", "suspended", "rejected"), s.created_at DESC')->fetchAll();
+$sf = (string) ($_GET['status'] ?? ''); if (($_GET['status'] ?? '') === 'pending') $sellers = array_values(array_filter($sellers, fn($r) => $r['status'] === 'pending')); elseif ($sf === 'messages') $sellers = array_values(array_filter($sellers, fn($r) => (int) $r['unread'] > 0));
 
 $page_title = 'Sellers';
 require 'includes/header.php';

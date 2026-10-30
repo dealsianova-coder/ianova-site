@@ -5,7 +5,7 @@ require_once __DIR__ . '/seller_ops.php';
 const DPF_SECTIONS = [
     'welcome' => 'Welcome card', 'kpi_revenue' => 'Revenue card', 'kpi_orders' => 'Orders card', 'kpi_products' => 'Products card', 'kpi_customers' => 'Customers card',
     'sales' => 'Sales chart', 'quick' => 'Quick actions', 'recent' => 'Recent orders', 'attention' => 'Needs your attention',
-    'more_orders' => 'Panel: Orders', 'more_products' => 'Panel: Products', 'more_categories' => 'Panel: Categories', 'more_sellers' => 'Panel: Sellers', 'more_users' => 'Panel: Users',
+    'more_orders' => 'Panel: Orders', 'more_products' => 'Panel: Products', 'more_categories' => 'Panel: Categories', 'more_sellers' => 'Panel: Sellers', 'more_users' => 'Panel: Customers',
 ];
 /** id => [label, sub, emoji, app page, website page] */
 const DPF_QUICK = [

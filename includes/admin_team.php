@@ -167,7 +167,7 @@ function team_sections(): array {
         'products' => ['📦 Products', ['products.php', 'product_view.php', 'product_edit.php', 'product_approve.php', 'product_delete.php', 'product_hide.php', 'product_unhide.php', 'products_bulk.php', 'products_bulk_template.php']],
         'categories' => ['🏷️ Categories', ['categories.php']],
         'orders' => ['🛒 Orders', ['orders.php', 'orders_bulk.php', 'order_view.php', 'order_item.php', 'order_note.php', 'order_ops.php', 'invoice.php', 'export_orders.php']],
-        'users' => ['👥 Users (sellers & customers)', ['users.php']],
+        'users' => ['🛍️ Customers', ['users.php']],
         'sellers' => ['🏪 Sellers', ['sellers.php', 'seller_messages.php']],
         'broadcast' => ['📢 Broadcast', ['broadcast.php']],
         'subscribers' => ['✉️ Subscribers', ['subscribers.php']],

@@ -310,6 +310,7 @@ switch ($action) {
         $where = []; $par = [];
         if ($qtext !== '') { $where[] = '(p.name LIKE ? OR p.slug LIKE ? OR p.seller_name LIKE ?)'; $like = '%' . $qtext . '%'; array_push($par, $like, $like, $like); }
         if (in_array($filter, ['pending', 'approved', 'rejected', 'hidden'], true)) { $where[] = 'p.status = ?'; $par[] = $filter; }
+        if ($filter === 'low') { $where[] = "p.status = 'approved' AND p.stock <= 3"; }
         if ($cat > 0) { $where[] = 'p.category_id = ?'; $par[] = $cat; }
         if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
         $lim = max(20, min(600, (int) ($_GET['limit'] ?? 300)));
@@ -319,6 +320,7 @@ switch ($action) {
         if ($more) $rows = array_slice($rows, 0, $lim);
         $counts = ['all' => (int) apx_val($pdo, 'SELECT COUNT(*) FROM products')];
         foreach (['pending', 'approved', 'rejected', 'hidden'] as $s1) $counts[$s1] = (int) apx_val($pdo, 'SELECT COUNT(*) FROM products WHERE status = ?', [$s1]);
+        $counts['low'] = (int) apx_val($pdo, "SELECT COUNT(*) FROM products WHERE status = 'approved' AND stock <= 3");
         out(['success' => true, 'products' => $rows, 'counts' => $counts, 'more' => $more]);
 
     case 'product_view':

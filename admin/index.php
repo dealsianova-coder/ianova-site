@@ -56,10 +56,10 @@ $tiles = [
 $attn = [
     ['🛒', 'Pending orders', $pendingOrders, 'orders.php?status=pending'],
     ['⏳', 'Products to review', $reviewProducts, 'products.php?status=pending'],
-    ['🏪', 'Sellers to approve', $pendingSellers, 'sellers.php'],
+    ['🏪', 'Sellers to approve', $pendingSellers, 'sellers.php?status=pending'],
     ['💬', 'Unread seller messages', $unreadMsgs, 'seller_messages.php'],
     ['🔔', 'Unread alerts', $alerts, 'notifications.php'],
-    ['⚠️', 'Low stock (3 or less)', $lowStock, 'products.php'],
+    ['⚠️', 'Low stock (3 or less)', $lowStock, 'products.php?status=low'],
     ['⏰', 'Orders waiting over 24 hours', (int) ((require_once __DIR__ . '/../includes/attention.php') ? ($at_ = attn_counts($pdo))['old_pending'] : 0), 'orders.php?status=pending'],
     ['🚚', 'Shipped over 7 days, not delivered', (int) $at_['stuck_shipped'], 'orders.php?status=shipped'],
     ['💳', 'Orders with a balance to collect', (int) $at_['to_collect'], 'payments.php'],
@@ -86,7 +86,7 @@ html{scroll-behavior:smooth}
 .rcent{display:flex;flex-direction:column;gap:10px}.rc{display:block;border:1px solid #dce4df;border-radius:14px;padding:12px;background:#fff;color:inherit}.rc:hover{border-color:#1d6b52}.rc-h{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}.rc-t{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.rc-f{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap}.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:900px){.two{grid-template-columns:1fr}}
 </style>
 
-<div class="dnav"><a href="#overview">Overview</a><a href="#orders">Orders</a><a href="#products">Products</a><a href="#categories">Categories</a><a href="#sellers">Sellers</a><a href="#users">Users</a></div>
+<div class="dnav"><a href="#overview">Overview</a><a href="#orders">Orders</a><a href="#products">Products</a><a href="#categories">Categories</a><a href="#sellers">Sellers</a><a href="#users">Customers</a></div>
 
 <?php /* iad-v2: dashboard example layout (customisable, hide revenue, grouped attention) */
 if (is_file(__DIR__ . '/../includes/dash_prefs.php')) require_once __DIR__ . '/../includes/dash_prefs.php';
@@ -262,7 +262,7 @@ function iad_svg(array $pts): string {
 </div>
 
 <div class="sec" id="users">
-  <h2>👥 Users <a href="users.php" style="text-decoration:underline">All users</a></h2>
+  <h2>🛍️ Customers <a href="users.php" style="text-decoration:underline">All customers</a></h2>
   <div class="card"><?php if (!$userRows): ?><p class="muted">No users yet.</p><?php endif; ?>
     <div class="plist"><?php foreach ($userRows as $u): ?>
       <a class="pr" href="users.php"><span class="m"><b><?= admin_h($u['name'] ?: 'User') ?></b><small><?= admin_h($u['email']) ?></small></span></a>
