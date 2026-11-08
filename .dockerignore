@@ -1,0 +1,13 @@
+.git
+.gitignore
+.github
+config.local.php
+.env
+.env.*
+vendor/
+uploads/
+*.log
+*.bak
+*.zip
+*~
+
