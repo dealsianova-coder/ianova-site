@@ -7,3 +7,5 @@ ianova-backup-*
 *.sql.gz
 ianova-backups/
 firebase-service-account.json
+mailtest.php
+zz-test.txt

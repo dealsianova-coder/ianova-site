@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../config.php';
+if(getenv("SETUP_KEY")&&($_GET["key"]??"")!==getenv("SETUP_KEY")){http_response_code(404);exit;}
+if(getenv("SETUP_KEY")&&($_GET["key"]??"")!==getenv("SETUP_KEY")){http_response_code(404);exit;}
 $pdo->exec("CREATE TABLE IF NOT EXISTS admins (id INT AUTO_INCREMENT PRIMARY KEY,name VARCHAR(120) NOT NULL,email VARCHAR(160) NOT NULL UNIQUE,password_hash VARCHAR(255) NOT NULL,last_login DATETIME NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB");
 $pdo->exec("CREATE TABLE IF NOT EXISTS settings (setting_key VARCHAR(80) PRIMARY KEY, setting_value TEXT NULL) ENGINE=InnoDB");
 try { $pdo->exec("ALTER TABLE products ADD COLUMN image VARCHAR(255) DEFAULT NULL"); } catch(Throwable $e) {}
