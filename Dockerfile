@@ -21,4 +21,4 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
-CMD ["sh", "-c", "php -S 0.0.0.0:${PORT:-8080} -t /var/www/html"]
+CMD ["sh", "-c", "php -d upload_max_filesize=8M -d post_max_size=10M -S 0.0.0.0:${PORT:-8080} -t /var/www/html"]
