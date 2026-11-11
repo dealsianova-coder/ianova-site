@@ -22,6 +22,21 @@ require 'includes/header.php';
 $banners = [];
 try { $banners = $pdo->query("SELECT * FROM banners WHERE is_active = 1 AND " . display_sql() . " ORDER BY sort_order, id")->fetchAll(); } catch (Throwable $e) { $banners = []; }
 
+// If no admin banners are configured, use current flash deals as the top promotional carousel.
+if (!$banners && $flash_deals) {
+    foreach ($flash_deals as $deal) {
+        $banners[] = [
+            'image' => (string) ($deal['image'] ?? ''),
+            'link_type' => 'product',
+            'link_value' => (string) $deal['id'],
+            'color' => 'rose',
+            'title' => "Today's Deals",
+            'subtitle' => 'Shop now',
+            'button_label' => 'Shop now',
+        ];
+    }
+}
+
 $video_ad_on = (($site_settings['video_ad_enabled'] ?? '0') === '1') && !empty($site_settings['video_ad_src']) && display_setting_allows($site_settings['disp_video_ad'] ?? 'both');
 if ($video_ad_on):
     $video_ad_href = '';

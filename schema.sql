@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS products (
     is_flash_deal    TINYINT(1) NOT NULL DEFAULT 0,
     seller_name      VARCHAR(120) DEFAULT 'IANOVA Direct',
     seller_id        INT DEFAULT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'approved',
     image            VARCHAR(255) DEFAULT NULL,
     created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
