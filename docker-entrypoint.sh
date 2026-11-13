@@ -18,5 +18,8 @@ define('ADMIN_EMAIL', getenv('ADMIN_EMAIL') ?: '');
 
 PHP
 
+mkdir -p /var/www/html/uploads
+cp -rn /opt/uploads-seed/. /var/www/html/uploads/ || true
+
 exec "$@"
 
