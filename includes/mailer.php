@@ -33,7 +33,40 @@ function ianova_email_logo(): string {
     return $src;
 }
 
+/** Send via Brevo's HTTPS API (works on Railway plans that block SMTP). */
+function brevo_send($to, $to_name, $subject, $html_body): bool {
+    $base = rtrim((string) getenv('SITE_URL'), '/');
+    $dir = __DIR__ . '/../assets/img/';
+    $logo = $base . '/assets/img/' . (is_file($dir . 'ianova-email-logo.png') ? 'ianova-email-logo.png' : 'ianova-wordmark.png');
+    if (strpos($html_body, 'cid:ianova-logo') !== false) {
+        $html_body = str_replace('cid:ianova-logo', $logo, $html_body);
+    } else {
+        $html_body = '<div style="max-width:520px;margin-bottom:14px;"><img src="' . $logo . '" alt="IANOVA" width="540" style="width:100%;max-width:540px;height:auto;display:block;"><div style="height:3px;background:#E9B949;"></div></div>' . $html_body;
+    }
+    $ch = curl_init('https://api.brevo.com/v3/smtp/email');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 10,
+        CURLOPT_HTTPHEADER => ['accept: application/json', 'content-type: application/json', 'api-key: ' . getenv('BREVO_API_KEY')],
+        CURLOPT_POSTFIELDS => json_encode([
+            'sender' => ['name' => SITE_NAME, 'email' => SMTP_USER],
+            'to' => [['email' => $to, 'name' => (string) $to_name]],
+            'subject' => $subject,
+            'htmlContent' => $html_body,
+        ]),
+    ]);
+    $resp = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($code >= 200 && $code < 300) return true;
+    error_log('Brevo send failed (' . $code . '): ' . substr((string) $resp, 0, 300));
+    return false;
+}
+
 function send_mail($to, $to_name, $subject, $html_body) {
+    if (getenv('BREVO_API_KEY')) { return brevo_send($to, $to_name, $subject, $html_body); }
     if (!class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
         error_log('Mail not sent: PHPMailer is missing. Run `composer install`.');
         return false;
