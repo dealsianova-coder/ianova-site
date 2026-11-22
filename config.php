@@ -39,7 +39,9 @@ try {
         ]
     );
 } catch (PDOException $e) {
-    die('Database connection failed. Check config.php and make sure schema.sql has been imported. (' . htmlspecialchars($e->getMessage()) . ')');
+    error_log('DB connection failed: ' . $e->getMessage());
+    http_response_code(503);
+    die('Service temporarily unavailable. Please try again shortly.');
 }
 
 require_once __DIR__ . '/includes/display.php';
